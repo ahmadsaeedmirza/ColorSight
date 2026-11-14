@@ -11,14 +11,20 @@ from .profile import CorrectionProfile
 from .naming import name_color
 from .plates import (
     DEFAULT_BATTERY,
+    EXPECTED_DIGIT_HOLES,
+    RECOG_MARGIN,
     CircleDot,
     PlateAxis,
     PlateSpec,
     RenderedPlate,
+    clean_digit_mask,
+    count_digit_holes,
+    digit_recognizability,
     generate_battery,
     hue_tile_colors,
     plate_metrics,
     rasterize_figure_dots,
+    recognize_figure_digit,
     render_plate,
 )
 from .scoring import (
@@ -47,6 +53,12 @@ __all__ = [
     "generate_battery",
     "plate_metrics",
     "rasterize_figure_dots",
+    "clean_digit_mask",
+    "count_digit_holes",
+    "digit_recognizability",
+    "recognize_figure_digit",
+    "EXPECTED_DIGIT_HOLES",
+    "RECOG_MARGIN",
     "hue_tile_colors",
     "PlateAnswer",
     "TestResult",

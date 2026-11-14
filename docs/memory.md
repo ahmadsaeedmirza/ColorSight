@@ -4,6 +4,46 @@ Newest entries first. Append after every prompt per `rules.md`.
 
 ---
 
+## 2026-11-14 — Shape legibility only (counters / dots / recognizability)
+
+**Prompt:** Fix over-dilated digit masks (3/9 blobs); smaller dots, open counters; add color-independent recognizability tests; contact sheet + figure-only previews; re-run tests; report per-plate pass/fail under normal/protan/deutan/tritan; update docs. Do **not** change confusion palettes or existing ΔE validation gates.
+
+**Shape changes (`core/plates.py`):**
+- Lexend-SemiBold ~60% (Bold fallback); **no mask dilate**; light erode; figure assignment on **inset** ink so disks cannot fill counters.
+- Smaller radii (~stroke/7), air gap between dots, crisp ellipse paint (no AA bloat).
+- Helpers: `clean_digit_mask`, `digit_recognizability`, `count_digit_holes`, `RECOG_MARGIN=0.08`.
+
+**Tests / preview:** `tests/test_plate_recognizability.py`; `tools/preview_plates.py` writes `contact_sheet.png` + `{id}_figure_only.png`.
+
+**Verified:** 34 unit tests OK. Palettes/ΔE gates unchanged and still pass.
+
+### Digit readable under simulation (PASS = expected digit; FAIL = designed miss)
+
+| plate | digit | axis | normal | protan | deutan | tritan |
+|-------|-------|------|--------|--------|--------|--------|
+| c1 | 8 | control | PASS | PASS | PASS | PASS |
+| h1 | 5 | hidden_rg | PASS | FAIL | FAIL | PASS |
+| h2 | 2 | hidden_rg | PASS | FAIL | FAIL | PASS |
+| h3 | 6 | hidden_rg | PASS | FAIL | FAIL | PASS |
+| h4 | 9 | hidden_rg | PASS | FAIL | FAIL | PASS |
+| h5 | 3 | hidden_rg | PASS | FAIL | FAIL | PASS |
+| h6 | 7 | hidden_rg | PASS | FAIL | FAIL | PASS |
+| cp1 | 4 | classify_protan | PASS | FAIL | PASS | PASS |
+| cp2 | 1 | classify_protan | PASS | FAIL | PASS | PASS |
+| cd1 | 5 | classify_deutan | PASS | PASS | FAIL | PASS |
+| cd2 | 2 | classify_deutan | PASS | PASS | FAIL | PASS |
+| cd3 | 6 | classify_deutan | PASS | PASS | FAIL | PASS |
+| t1 | 3 | tritan | PASS | PASS | PASS | FAIL |
+| t2 | 9 | tritan | PASS | PASS | PASS | FAIL |
+
+**Totals:** normal **14/14 PASS**; protan **6 PASS / 8 FAIL**; deutan **5 PASS / 9 FAIL**; tritan **12 PASS / 2 FAIL**.
+
+**Simulated respondents:** normal→normal, protanopia→protanopia, deuteranopia→deuteranopia, tritanopia→tritanopia.
+
+**Shape check:** every plate `ok_match` + `ok_holes` under normal figure raster (margins ≥ 0.08).
+
+---
+
 ## 2026-11-14 — Plate audit + validation + 3 UI fixes
 
 **Prompt:** Fix unreadable plates (dense packing, bold mask, confusion palettes, metadata, ΔE/IoU tests, preview tool, scoring with inconclusive); UI: swatch black edge, friendly save text, nav Camera/FAB.

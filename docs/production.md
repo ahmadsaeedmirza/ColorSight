@@ -32,7 +32,9 @@ Requires NumPy + OpenCV (`opencv-python` or `opencv-python-headless`).
 - Plate artwork is original/procedural — do not replace with copyrighted Ishihara scans.
 - Progress UI widget is `PillProgressBar` (not Kivy’s `ProgressBar`).
 - Plate quality gates: `python -m unittest tests.test_plate_validation -v`
-- Preview PNGs: `python tools/preview_plates.py` → `debug/plates/` (gitignored).
+- Shape recognizability: `python -m unittest tests.test_plate_recognizability -v`
+- Full suite: `python -m unittest discover -s tests`
+- Preview PNGs: `python tools/preview_plates.py` → `debug/plates/` (per-plate normal/CVD views, `*_figure_only.png`, `contact_sheet.png`; gitignored).
 
 ## Android packaging (Buildozer)
 

@@ -15,7 +15,11 @@ from PIL import ImageDraw, ImageFont
 from .cvd_types import CVDType
 from .engine import apply_simulation
 
-_FONTS = Path(__file__).resolve().parents[1] / "assets" / "fonts" / "Lexend-Bold.ttf"
+# SemiBold keeps a bold sans look with more open counters than Bold (3/6/8/9).
+_FONTS = Path(__file__).resolve().parents[1] / "assets" / "fonts" / "Lexend-SemiBold.ttf"
+_FONTS_BOLD = Path(__file__).resolve().parents[1] / "assets" / "fonts" / "Lexend-Bold.ttf"
+if not _FONTS.exists():
+    _FONTS = _FONTS_BOLD
 
 # Precomputed equiluminant confusion pairs (validated against Machado sim @ 1.0)
 _FALLBACK_PAIRS = {
@@ -224,11 +228,19 @@ def _pair_for_axis(axis: PlateAxis, rng: np.random.Generator):
     return pair
 
 
-def _digit_mask(digit: int, size: int, rng: np.random.Generator) -> np.ndarray:
+def clean_digit_mask(
+    digit: int,
+    size: int,
+    *,
+    dilate_px: int = 0,
+    angle: float = 0.0,
+) -> np.ndarray:
+    """Clean centered Lexend digit (~60% of plate). Optional light dilation only."""
     canvas = PILImage.new("L", (size, size), 0)
     draw = ImageDraw.Draw(canvas)
     font_size = int(size * 0.60)
-    font = ImageFont.truetype(str(_FONTS), font_size)
+    font_path = _FONTS if _FONTS.exists() else _FONTS_BOLD
+    font = ImageFont.truetype(str(font_path), font_size)
     text = str(int(digit) % 10)
     bbox = draw.textbbox((0, 0), text, font=font)
     tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
@@ -236,24 +248,74 @@ def _digit_mask(digit: int, size: int, rng: np.random.Generator) -> np.ndarray:
     y = (size - th) // 2 - bbox[1]
     draw.text((x, y), text, font=font, fill=255)
     arr = np.array(canvas, dtype=np.uint8)
-    angle = float(rng.uniform(-5, 5))
-    M = cv2.getRotationMatrix2D((size / 2, size / 2), angle, 1.0)
-    arr = cv2.warpAffine(arr, M, (size, size), flags=cv2.INTER_NEAREST)
-    # Thick stroke: ≥3–4 average dots (avg diam ≈ 0.04*size)
-    k = max(11, int(size * 0.065))
-    if k % 2 == 0:
-        k += 1
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
-    arr = cv2.dilate(arr, kernel, iterations=4)
+    if abs(angle) > 1e-3:
+        M = cv2.getRotationMatrix2D((size / 2, size / 2), angle, 1.0)
+        arr = cv2.warpAffine(arr, M, (size, size), flags=cv2.INTER_NEAREST)
+    if dilate_px > 0:
+        k = dilate_px if dilate_px % 2 == 1 else dilate_px + 1
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
+        # Single pass — keep counters (holes) of 3/6/8/9 open
+        arr = cv2.dilate(arr, kernel, iterations=1)
     _, arr = cv2.threshold(arr, 127, 255, cv2.THRESH_BINARY)
     return arr
 
 
-def _pack_circles_dense(size: int, rng: np.random.Generator) -> list[tuple[float, float, float]]:
+def _digit_mask(digit: int, size: int, rng: np.random.Generator) -> np.ndarray:
+    """Plate figure mask: Lexend SemiBold ~60%, light erode so counters stay open."""
+    angle = float(rng.uniform(-3, 3))
+    arr = clean_digit_mask(digit, size, dilate_px=0, angle=angle)
+    # One light erode — opens bowls/loops without collapsing stroke below ~3 dots
+    k = max(3, int(size * 0.007))
+    if k % 2 == 0:
+        k += 1
+    arr = cv2.erode(arr, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k)), iterations=1)
+    _, arr = cv2.threshold(arr, 127, 255, cv2.THRESH_BINARY)
+    return arr
+
+
+def _stroke_px(mask: np.ndarray) -> float:
+    if mask.max() == 0:
+        return 0.0
+    binary = (mask > 0).astype(np.uint8)
+    dist = cv2.distanceTransform(binary, cv2.DIST_L2, 5)
+    inside = dist[binary > 0]
+    if inside.size == 0:
+        return 0.0
+    return 2.0 * float(np.median(inside))
+
+
+def _estimate_stroke_width_dots(mask: np.ndarray, avg_dot_diam: float) -> float:
+    if avg_dot_diam <= 0:
+        return 0.0
+    return _stroke_px(mask) / avg_dot_diam
+
+
+def _radius_band_for_stroke(stroke_px: float, size: int) -> tuple[float, float]:
+    """Choose radii so ~3.2–3.8 dots span the stroke; keep paint radius ≥ 2.2 px."""
+    # Smaller dots after Bold erode — diameter ≈ stroke/3.5 → radius ≈ stroke/7
+    target_r = max(2.2, stroke_px / 7.0) if stroke_px > 0 else size * 0.009
+    r_min = max(2.0, target_r * 0.82)
+    r_max = min(target_r * 1.08, stroke_px / 6.2 if stroke_px > 0 else target_r * 1.08)
+    if r_max < r_min:
+        r_max = r_min + 0.12
+    return r_min, r_max
+
+
+def _pack_circles_dense(
+    size: int,
+    rng: np.random.Generator,
+    r_min: float | None = None,
+    r_max: float | None = None,
+) -> list[tuple[float, float, float]]:
+    """Dense packing: many small dots, light touch (not blobbing) to fill strokes."""
     cx = cy = size / 2.0
     R = size * 0.475
-    r_min, r_max = size * 0.011, size * 0.030
-    spacing = size * 0.036
+    if r_min is None or r_max is None:
+        r_min = size * 0.0075
+        r_max = size * 0.0125
+    # Air between dots (Ishihara-like stipple); avoid solid blobbing that closes bowls
+    spacing = max(r_min + r_max + 1.0, size * 0.019)
+    gap = 0.75
     circles: list[tuple[float, float, float]] = []
     row = 0
     y = cy - R
@@ -262,22 +324,23 @@ def _pack_circles_dense(size: int, rng: np.random.Generator) -> list[tuple[float
         x = cx - R + x_off
         while x <= cx + R:
             r = float(rng.uniform(r_min, r_max))
-            jx = float(rng.uniform(-spacing * 0.2, spacing * 0.2))
-            jy = float(rng.uniform(-spacing * 0.2, spacing * 0.2))
+            jx = float(rng.uniform(-spacing * 0.10, spacing * 0.10))
+            jy = float(rng.uniform(-spacing * 0.10, spacing * 0.10))
             px, py = x + jx, y + jy
             if (px - cx) ** 2 + (py - cy) ** 2 <= (R - r) ** 2:
                 circles.append((px, py, r))
             x += spacing
-        y += spacing * 0.86
+        y += spacing * 0.866
         row += 1
     cell = spacing
     grid: dict[tuple[int, int], list[int]] = {}
     for i, (x, y, r) in enumerate(circles):
         grid.setdefault((int(x / cell), int(y / cell)), []).append(i)
     extras = attempts = 0
-    while extras < len(circles) // 4 and attempts < len(circles) * 10:
+    target_extras = len(circles) // 3
+    while extras < target_extras and attempts < len(circles) * 14:
         attempts += 1
-        r = float(rng.uniform(r_min * 0.85, r_max * 0.95))
+        r = float(rng.uniform(r_min, r_max))
         ang = float(rng.uniform(0, 2 * np.pi))
         rad = float(rng.uniform(0, R - r))
         x = cx + rad * np.cos(ang)
@@ -288,7 +351,7 @@ def _pack_circles_dense(size: int, rng: np.random.Generator) -> list[tuple[float
             for dj in (-1, 0, 1):
                 for idx in grid.get((gi + di, gj + dj), ()):
                     px, py, pr = circles[idx]
-                    if (x - px) ** 2 + (y - py) ** 2 < (r + pr + 0.35) ** 2:
+                    if (x - px) ** 2 + (y - py) ** 2 < (r + pr + gap) ** 2:
                         ok = False
                         break
                 if not ok:
@@ -302,28 +365,17 @@ def _pack_circles_dense(size: int, rng: np.random.Generator) -> list[tuple[float
     return circles
 
 
-def _estimate_stroke_width_dots(mask: np.ndarray, avg_dot_diam: float) -> float:
-    if mask.max() == 0 or avg_dot_diam <= 0:
-        return 0.0
-    binary = (mask > 0).astype(np.uint8)
-    dist = cv2.distanceTransform(binary, cv2.DIST_L2, 5)
-    inside = dist[binary > 0]
-    if inside.size == 0:
-        return 0.0
-    return (2.0 * float(np.median(inside))) / avg_dot_diam
-
-
-def render_plate(spec: PlateSpec, size: int = 512, seed: int | None = None) -> RenderedPlate:
-    rng = np.random.default_rng(seed if seed is not None else abs(hash(spec.plate_id)) % (2**31))
-    fig_base, gnd_base = _pair_for_axis(spec.axis, rng)
-    mask = _digit_mask(spec.digit, size, rng)
-    circles = _pack_circles_dense(size, rng)
-
-    img = np.full((size, size, 3), 245, dtype=np.uint8)
-    yy, xx = np.ogrid[:size, :size]
-    disk = (xx - size / 2) ** 2 + (yy - size / 2) ** 2 <= (size * 0.48) ** 2
+def _paint_dots(
+    img: np.ndarray,
+    disk: np.ndarray,
+    circles: list[tuple[float, float, float]],
+    mask: np.ndarray,
+    fig_base: tuple[int, int, int],
+    gnd_base: tuple[int, int, int],
+    rng: np.random.Generator,
+) -> list[CircleDot]:
+    size = img.shape[0]
     img[disk] = (238, 235, 228)
-
     dots: list[CircleDot] = []
     for x, y, r in circles:
         ix, iy = int(round(x)), int(round(y))
@@ -331,27 +383,51 @@ def render_plate(spec: PlateSpec, size: int = 512, seed: int | None = None) -> R
             continue
         is_fig = bool(mask[iy, ix] > 0)
         rgb = _chroma_jitter(fig_base if is_fig else gnd_base, rng)
-        cv2.circle(img, (ix, iy), max(1, int(round(r))), rgb, -1, lineType=cv2.LINE_AA)
+        # Perfect disk via ellipse mask (avoids Bresenham star/jagged artifacts)
+        rad_px = max(2, int(np.ceil(r - 1e-6)))
+        cv2.ellipse(img, (ix, iy), (rad_px, rad_px), 0, 0, 360, rgb, -1, lineType=cv2.LINE_8)
         dots.append(CircleDot(x=x, y=y, r=r, is_figure=is_fig, rgb=rgb))
+    return dots
+
+
+def _inset_mask_for_dots(mask: np.ndarray, r_max: float) -> np.ndarray:
+    """Erode ink by ~dot radius so painted circles stay inside the stroke (open counters)."""
+    k = max(3, int(np.ceil(r_max * 1.25)))
+    if k % 2 == 0:
+        k += 1
+    out = cv2.erode(mask, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k)), iterations=1)
+    _, out = cv2.threshold(out, 127, 255, cv2.THRESH_BINARY)
+    return out
+
+
+def render_plate(spec: PlateSpec, size: int = 512, seed: int | None = None) -> RenderedPlate:
+    rng = np.random.default_rng(seed if seed is not None else abs(hash(spec.plate_id)) % (2**31))
+    fig_base, gnd_base = _pair_for_axis(spec.axis, rng)
+    ink = _digit_mask(spec.digit, size, rng)
+    stroke_px = _stroke_px(ink)
+    r_min, r_max = _radius_band_for_stroke(stroke_px, size)
+    # Assignment inset so painted circles stay inside ink (open counters / bowls)
+    assign = _inset_mask_for_dots(ink, r_max)
+    if assign.max() == 0:
+        assign = ink
+    circles = _pack_circles_dense(size, rng, r_min=r_min, r_max=r_max)
+
+    img = np.full((size, size, 3), 245, dtype=np.uint8)
+    yy, xx = np.ogrid[:size, :size]
+    disk = (xx - size / 2) ** 2 + (yy - size / 2) ** 2 <= (size * 0.48) ** 2
+
+    dots = _paint_dots(img, disk, circles, assign, fig_base, gnd_base, rng)
 
     fig_n = sum(1 for d in dots if d.is_figure)
     if fig_n < 40:
-        k = max(11, int(size * 0.07))
-        if k % 2 == 0:
-            k += 1
-        mask = cv2.dilate(mask, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k)), 1)
-        dots = []
-        img[disk] = (238, 235, 228)
-        for x, y, r in circles:
-            ix, iy = int(round(x)), int(round(y))
-            if not (0 <= iy < size and 0 <= ix < size):
-                continue
-            is_fig = bool(mask[iy, ix] > 0)
-            rgb = _chroma_jitter(fig_base if is_fig else gnd_base, rng)
-            cv2.circle(img, (ix, iy), max(1, int(round(r))), rgb, -1, lineType=cv2.LINE_AA)
-            dots.append(CircleDot(x=x, y=y, r=r, is_figure=is_fig, rgb=rgb))
+        # Milder inset only — never dilate (dilation closes 3/9 counters)
+        assign = _inset_mask_for_dots(ink, max(1.0, r_max * 0.5))
+        if assign.max() == 0:
+            assign = ink
+        dots = _paint_dots(img, disk, circles, assign, fig_base, gnd_base, rng)
 
-    return RenderedPlate(spec=spec, image=img, mask=mask, dots=dots)
+    # Store ink (not inset) so stroke/IoU gates measure the intended digit shape
+    return RenderedPlate(spec=spec, image=img, mask=ink, dots=dots)
 
 
 def generate_battery(
@@ -369,14 +445,165 @@ def rasterize_figure_dots(plate: RenderedPlate, size: int | None = None) -> np.n
     scale = h / plate.image.shape[0]
     for d in plate.dots:
         if d.is_figure:
-            cv2.circle(
+            rr = max(2, int(np.ceil(d.r * scale - 1e-6)))
+            cv2.ellipse(
                 out,
                 (int(round(d.x * scale)), int(round(d.y * scale))),
-                max(1, int(round(d.r * scale))),
+                (rr, rr),
+                0,
+                0,
+                360,
                 255,
                 -1,
+                lineType=cv2.LINE_8,
             )
     return out
+
+
+# Topology of Lexend digits (closed counters / holes).
+EXPECTED_DIGIT_HOLES: dict[int, int] = {
+    0: 1,
+    1: 0,
+    2: 0,
+    3: 0,
+    4: 1,  # Lexend closed triangular counter
+    5: 0,
+    6: 1,
+    7: 0,
+    8: 2,
+    9: 1,
+}
+
+# Minimum IoU lead of best digit over runner-up (shape recognizability)
+RECOG_MARGIN = 0.08
+
+
+def normalize_binary_digit(binary: np.ndarray, out_size: int = 128) -> np.ndarray:
+    """Crop ink bbox and fit into a fixed square for template comparison."""
+    bin_u8 = (binary > 0).astype(np.uint8) * 255
+    ys, xs = np.where(bin_u8 > 0)
+    canvas = np.zeros((out_size, out_size), dtype=np.uint8)
+    if xs.size == 0:
+        return canvas
+    pad = 2
+    y0, y1 = max(0, int(ys.min()) - pad), min(bin_u8.shape[0], int(ys.max()) + 1 + pad)
+    x0, x1 = max(0, int(xs.min()) - pad), min(bin_u8.shape[1], int(xs.max()) + 1 + pad)
+    crop = bin_u8[y0:y1, x0:x1]
+    ch, cw = crop.shape
+    scale = (out_size - 8) / max(ch, cw)
+    nh, nw = max(1, int(round(ch * scale))), max(1, int(round(cw * scale)))
+    resized = cv2.resize(crop, (nw, nh), interpolation=cv2.INTER_NEAREST)
+    yy = (out_size - nh) // 2
+    xx = (out_size - nw) // 2
+    canvas[yy : yy + nh, xx : xx + nw] = resized
+    _, canvas = cv2.threshold(canvas, 127, 255, cv2.THRESH_BINARY)
+    return canvas
+
+
+def fill_figure_stroke_gaps(binary: np.ndarray, avg_dot_r: float | None = None) -> np.ndarray:
+    """Morph-close inter-dot gaps inside strokes without sealing digit counters."""
+    bin_u8 = (binary > 0).astype(np.uint8) * 255
+    if avg_dot_r is None:
+        # Infer from foreground area / perimeter-ish: use ~2% of min side, capped
+        k = max(3, int(min(bin_u8.shape) * 0.018))
+    else:
+        # Close gaps ~ one diameter; counters of 6/8/9 are much larger
+        k = max(3, int(round(avg_dot_r * 2.2)))
+    if k % 2 == 0:
+        k += 1
+    closed = cv2.morphologyEx(
+        bin_u8, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
+    )
+    # Drop speckles that are not part of the digit
+    n_labels, labels, stats, _ = cv2.connectedComponentsWithStats(closed, connectivity=8)
+    if n_labels <= 1:
+        return closed
+    areas = stats[1:, cv2.CC_STAT_AREA]
+    keep = 1 + int(np.argmax(areas))
+    out = np.zeros_like(closed)
+    out[labels == keep] = 255
+    return out
+
+
+def count_digit_holes(binary: np.ndarray, avg_dot_r: float | None = None) -> int:
+    """Count closed counters via contour hierarchy (holes = children of outer contours)."""
+    closed = fill_figure_stroke_gaps(binary, avg_dot_r)
+    contours, hierarchy = cv2.findContours(closed, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
+    if hierarchy is None:
+        return 0
+    # Ignore tiny spurious holes (noise) — real counters are sizable
+    min_hole_area = (min(closed.shape) * 0.03) ** 2
+    holes = 0
+    for i, h in enumerate(hierarchy[0]):
+        if h[3] < 0:
+            continue
+        area = cv2.contourArea(contours[i])
+        if area >= min_hole_area:
+            holes += 1
+    return holes
+
+
+def _binary_iou(a: np.ndarray, b: np.ndarray) -> float:
+    aa = a > 0
+    bb = b > 0
+    inter = np.logical_and(aa, bb).sum()
+    union = np.logical_or(aa, bb).sum()
+    return float(inter / union) if union else 0.0
+
+
+def match_digit_scores(figure_binary: np.ndarray, avg_dot_r: float | None = None) -> dict[int, float]:
+    """IoU (+ optional template correlation) of filled figure vs clean Lexend 0–9."""
+    filled = fill_figure_stroke_gaps(figure_binary, avg_dot_r)
+    probe = normalize_binary_digit(filled)
+    size = 256
+    scores: dict[int, float] = {}
+    for d in range(10):
+        tmpl = clean_digit_mask(d, size, dilate_px=0, angle=0.0)
+        tnorm = normalize_binary_digit(tmpl)
+        iou = _binary_iou(probe, tnorm)
+        # Correlation on float masks sharpens the margin between near digits (3/8/9)
+        corr = float(
+            cv2.matchTemplate(
+                probe.astype(np.float32) / 255.0,
+                tnorm.astype(np.float32) / 255.0,
+                cv2.TM_CCOEFF_NORMED,
+            )[0, 0]
+        )
+        scores[d] = 0.55 * iou + 0.45 * max(0.0, corr)
+    return scores
+
+
+def recognize_figure_digit(
+    figure_binary: np.ndarray, avg_dot_r: float | None = None
+) -> tuple[int, float, float]:
+    """Return (best_digit, best_score, runner_up_score)."""
+    scores = match_digit_scores(figure_binary, avg_dot_r)
+    ranked = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
+    best_d, best_s = ranked[0]
+    runner_s = ranked[1][1] if len(ranked) > 1 else 0.0
+    return best_d, best_s, runner_s
+
+
+def digit_recognizability(plate: RenderedPlate) -> dict:
+    """Color-independent shape check against expected_normal digit."""
+    expected = plate.spec.expected_normal
+    fig = rasterize_figure_dots(plate)
+    avg_r = float(np.mean([d.r for d in plate.dots])) if plate.dots else None
+    best, best_s, runner_s = recognize_figure_digit(fig, avg_r)
+    holes = count_digit_holes(fig, avg_r)
+    exp_holes = EXPECTED_DIGIT_HOLES.get(int(expected) if expected is not None else -1, -1)
+    return {
+        "plate_id": plate.spec.plate_id,
+        "expected": expected,
+        "best_digit": best,
+        "best_score": best_s,
+        "runner_up_score": runner_s,
+        "margin": best_s - runner_s,
+        "holes": holes,
+        "expected_holes": exp_holes,
+        "ok_match": expected is not None and best == int(expected) and (best_s - runner_s) >= RECOG_MARGIN,
+        "ok_holes": expected is not None and holes == exp_holes,
+    }
 
 
 def plate_metrics(plate: RenderedPlate) -> dict:
@@ -395,8 +622,10 @@ def plate_metrics(plate: RenderedPlate) -> dict:
         return _delta_e(_rgb_to_lab_arr(sim[0:1])[0, 0], _rgb_to_lab_arr(sim[1:2])[0, 0])
 
     avg_diam = float(np.mean([2 * d.r for d in plate.dots])) if plate.dots else 1.0
+    avg_r = float(np.mean([d.r for d in plate.dots])) if plate.dots else 1.0
     stroke = _estimate_stroke_width_dots(plate.mask, avg_diam)
-    fig_rast = rasterize_figure_dots(plate)
+    # Close inter-dot gaps before IoU so sparse packing still covers the ink stroke
+    fig_rast = fill_figure_stroke_gaps(rasterize_figure_dots(plate), avg_r)
     mask = plate.mask
     if fig_rast.shape != mask.shape:
         fig_rast = cv2.resize(fig_rast, (mask.shape[1], mask.shape[0]), interpolation=cv2.INTER_NEAREST)
