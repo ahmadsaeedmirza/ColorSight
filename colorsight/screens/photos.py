@@ -18,9 +18,13 @@ from colorsight.image_pipeline import (
     PREVIEW_LONGEST,
     build_comparison_card,
     load_rgb_uint8,
+    photos_default_mode,
+    photos_default_split,
     render_mode_rgb,
+    reset_link_visible,
     resize_longest,
     severity_for_slider,
+    strength_percent,
 )
 from colorsight.photo_io import pick_image, save_corrected_image, share_image
 from colorsight.screens.photo_widgets import (
@@ -35,6 +39,9 @@ from colorsight.theme.tokens import Colors, Fonts, Icons, Spacing
 from colorsight.widgets import PastelCard, PrimaryButton, RoundIconButton
 
 log = logging.getLogger(__name__)
+
+# Session-scoped (not a state-changing timer): show compare hint once per app run
+_COMPARE_HINT_SHOWN = False
 
 
 class PhotosScreen(Screen):
@@ -51,6 +58,7 @@ class PhotosScreen(Screen):
         self._sev_ev = None
         self._busy = False
         self._status_clear = None
+        self._compare_hint_lbl = None
         self._root = BoxLayout(orientation="vertical")
         self.add_widget(self._root)
         self._build_shell()
@@ -62,12 +70,11 @@ class PhotosScreen(Screen):
     # --- profile ---------------------------------------------------------
 
     def _reload_profile(self):
+        """Always reload from storage so Photos never stays stale after a new test save."""
         app = App.get_running_app()
         path = profile_path()
         profile = None
-        if app is not None and getattr(app, "correction_profile", None) is not None:
-            profile = app.correction_profile
-        elif path.is_file():
+        if path.is_file():
             try:
                 from core.profile import CorrectionProfile
 
@@ -82,18 +89,26 @@ class PhotosScreen(Screen):
             sev = severity_for_slider(float(profile.severity))
             self._saved_severity = sev
             self._preview_severity = sev
+            pct = strength_percent(sev)
+            log.info(
+                "photos_strength profile_severity=%.4f slider=%d",
+                float(profile.severity),
+                pct,
+            )
+        else:
+            log.info("photos_strength no profile on disk")
 
     def _sync_strength_ui(self):
         if hasattr(self, "_sev_bar"):
             self._sev_bar.set_value(self._preview_severity, notify=False)
         if hasattr(self, "_sev_value"):
-            self._sev_value.text = f"{int(round(self._preview_severity * 100))}"
+            self._sev_value.text = f"{strength_percent(self._preview_severity)}"
         self._update_reset_visibility()
 
     def _update_reset_visibility(self):
         if not hasattr(self, "_reset_btn"):
             return
-        differs = abs(self._preview_severity - self._saved_severity) > 0.005
+        differs = reset_link_visible(self._preview_severity, self._saved_severity)
         self._reset_btn.opacity = 1 if differs else 0
         self._reset_btn.disabled = not differs
         self._reset_btn.height = dp(28) if differs else 0
@@ -203,8 +218,29 @@ class PhotosScreen(Screen):
 
     def _show_viewer(self):
         self._viewer = BeforeAfterViewer(size_hint=(1, 1))
-        self._viewer.split = 0.5
+        self._viewer.split = photos_default_split()
+        self._viewer.split_cb = self._on_split_drag
         self._body.add_widget(self._viewer)
+
+        global _COMPARE_HINT_SHOWN
+        show_hint = not _COMPARE_HINT_SHOWN
+        if show_hint:
+            _COMPARE_HINT_SHOWN = True
+        self._compare_hint_lbl = Label(
+            text="Drag the handle to compare with the original",
+            font_name=Fonts.medium,
+            font_size=dp(12),
+            color=Colors.accent_blue,
+            size_hint_y=None,
+            height=dp(22) if show_hint else 0,
+            opacity=1 if show_hint else 0,
+            halign="left",
+            valign="middle",
+        )
+        self._compare_hint_lbl.bind(
+            size=lambda *_: setattr(self._compare_hint_lbl, "text_size", self._compare_hint_lbl.size)
+        )
+        self._body.add_widget(self._compare_hint_lbl)
 
         self._shimmer = LoadingShimmer()
         self._body.add_widget(self._shimmer)
@@ -358,18 +394,24 @@ class PhotosScreen(Screen):
             self._full_rgb = full
             self._preview_rgb = resize_longest(full, PREVIEW_LONGEST)
             self._cache.clear()
-            self._mode = "corrected"
-            # Re-sync strength from saved profile whenever a new photo is loaded
-            if self._profile is not None:
-                self._preview_severity = severity_for_slider(float(self._profile.severity))
-                self._saved_severity = self._preview_severity
+            self._reload_profile()
+            self._mode = photos_default_mode(self._profile is not None)
             self._rebuild_body()
             self._schedule_process()
 
         Clock.schedule_once(_apply, 0)
 
+    def _on_split_drag(self, _split: float):
+        global _COMPARE_HINT_SHOWN
+        _COMPARE_HINT_SHOWN = True
+        if self._compare_hint_lbl is not None:
+            self._compare_hint_lbl.opacity = 0
+            self._compare_hint_lbl.height = 0
+
     def _on_mode(self, mode: str):
         self._mode = mode
+        if hasattr(self, "_viewer") and mode in ("corrected", "simulation"):
+            self._viewer.split = photos_default_split()
         self._update_sim_hint()
         self._push_viewer_images()
 

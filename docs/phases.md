@@ -25,14 +25,16 @@
 | **Photos / image correction** — profile gate, picker, before/after, modes, MediaStore save | Done |
 | Photos toolbar crash fix — rename `on_mode`/`on_split` ObjectProperties to `*_cb` | Done |
 | Photos Strength default/reset, divider labels, mode Save/Share, comparison card | Done |
+| Photos default Corrected @ split 0% + disk profile reload | Done |
+| **Camera** — live OpenCV/Camera4Kivy pipeline, modes, freeze/capture | Done |
+| **Lens** — shared loupe + `name_color` (opens Camera with loupe on) | Done |
+| Settings FPS debug toggle | Done |
 
 ### Remaining in-app features
 
 | Feature | Description |
 |---------|-------------|
 | Correction profile UI | View/edit saved profile on Profile screen (“Update my profile”) |
-| Live camera correction | Apply profile to live feed |
-| Magnifier lens | Loupe + `name_color` under sample |
 
 Stack: NumPy + OpenCV in `core/`, Kivy UI in `colorsight/`, Buildozer packaging.
 

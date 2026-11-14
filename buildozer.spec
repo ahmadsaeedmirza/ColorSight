@@ -10,7 +10,7 @@ source.include_patterns = assets/*,assets/fonts/*,assets/icons/*,docs/*,colorsig
 version = 0.1.0
 
 # Desktop deps listed in requirements.txt; Android recipes:
-requirements = python3,kivy==2.3.0,numpy,opencv,pillow,pyjnius,android
+requirements = python3,kivy==2.3.0,numpy,opencv,pillow,pyjnius,android,camera4kivy
 
 orientation = portrait
 fullscreen = 0

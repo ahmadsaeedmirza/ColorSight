@@ -310,7 +310,7 @@ class PhotoModeToolbar(BoxLayout):
 class BeforeAfterViewer(FloatLayout):
     """Pinch-zoom / pan photo stage with optional before/after divider."""
 
-    split = NumericProperty(0.5)
+    split = NumericProperty(0.0)
     split_cb = ObjectProperty(None, allownone=True)
 
     def __init__(self, **kwargs):
@@ -453,9 +453,10 @@ class BeforeAfterViewer(FloatLayout):
             self.canvas.after.clear()
             return
         sx, sy, sw, sh = self._image_rect()
-        # Keep handle center inside image bounds
-        hx = float(np.clip(sx + self.split * sw, sx, sx + sw))
-        hy = sy + sh / 2
+        # Keep the entire handle (hit ≥44 dp) inside the image bounds
+        half = self._handle.width / 2.0
+        hx = float(np.clip(sx + self.split * sw, sx + half, sx + sw - half))
+        hy = float(np.clip(sy + sh / 2, sy + half, sy + sh - half))
         self._handle.center = (hx, hy)
         self._handle_icon.pos = self._handle.pos
         # Corner labels inside image

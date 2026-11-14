@@ -110,6 +110,24 @@ def divider_visible(mode: str) -> bool:
     return mode in ("corrected", "simulation")
 
 
+def photos_default_mode(has_profile: bool) -> str:
+    """Open Corrected when a profile exists; otherwise Original."""
+    return "corrected" if has_profile else "original"
+
+
+def photos_default_split() -> float:
+    """Start at 0% so the whole image shows the filtered side; drag right to reveal original."""
+    return 0.0
+
+
+def strength_percent(severity: float) -> int:
+    return int(round(severity_for_slider(severity) * 100.0))
+
+
+def reset_link_visible(preview_severity: float, saved_severity: float) -> bool:
+    return abs(float(preview_severity) - float(saved_severity)) > 0.005
+
+
 def right_label_for_mode(mode: str) -> str:
     if mode == "simulation":
         return "Simulation"

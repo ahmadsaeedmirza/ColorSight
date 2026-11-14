@@ -31,7 +31,9 @@ This is not optional. Documentation is part of the deliverable, not an afterthou
 - **Vision Test results** must keep a clear screening disclaimer (not a medical diagnosis; display variation). After save, show friendly copy only — never surface filesystem paths in the UI.
 - **Photos** must reuse `core.apply_correction` / `apply_simulation` / `CorrectionProfile` — do not reimplement CVD math in the UI. Strength is temporary; never overwrite the saved profile from Photos. Never show file paths in pick/save/share UI.
 - **Photos Android I/O:** Photo Picker + MediaStore; Share via FileProvider + `ACTION_SEND` (see `assets/android/` + `production.md`). Keep `tests/test_image_pipeline.py` and `tests/test_photos_pipeline.py` green when touching Photos helpers.
-- **Photos divider:** hide in Original; Corrected/Simulation = left original / right mode with labels; handle hit ≥44 dp.
+- **Photos divider:** hide in Original; Corrected/Simulation = left original / right mode with labels; **default split 0%** (full filtered); handle hit ≥44 dp and fully inside image bounds. Reload profile from disk on every Photos/Camera enter.
+- **Camera/Lens:** share one pipeline (`camera_source` + `camera_pipeline` + `camera_widgets`). Drop frames instead of queueing; stop capture on leave/pause. Loupe samples **original** frames for `core.name_color`. Never auto-advance app state with orphan timers (user-driven only).
+- **Settings:** optional camera FPS overlay via `app.show_camera_fps` (not a Kivy `Switch` — use a custom toggle).
 - Desktop-first during development: `python main.py` must keep working; `python -m unittest discover -s tests` must stay green when touching `/core`.
 - Do not implement Phase 2 (system-wide color filter / Shizuku) until Phase 1 is complete and explicitly requested.
 - **Never name custom widgets after built-in Kivy widgets** (`ProgressBar`, `Button`, `Label`, `Slider`, `Image`, `Switch`, …). Kivy binds `style.kv` by class name and will crash or mis-style collisions. Use prefixed names (e.g. `PillProgressBar`, `PreviewSeverityBar`).

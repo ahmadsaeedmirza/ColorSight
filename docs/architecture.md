@@ -98,21 +98,29 @@ Reuses **`core.apply_correction`**, **`core.apply_simulation`**, and **`Correcti
 | Profile gate | Load via `storage.profile_path()` / `app.correction_profile`. No profile → pink CTA card → Test. |
 | Pick | Desktop: tkinter jpg/png/webp. Android 13+: Photo Picker (`PICK_IMAGES`); older: `GET_CONTENT` + optional `READ_MEDIA_IMAGES` / `READ_EXTERNAL_STORAGE`. |
 | Preview | Longest side ≤ **1080**; bg thread + shimmer; ~100 ms Strength debounce; cache Corrected/Simulation for instant mode toggle. |
-| Modes | Original (no divider) / Corrected & Simulation (left=original, right=mode, labels, 50% start). |
-| Strength | Defaults to saved profile severity (percent-rounded). Preview-only via `render_mode_rgb` / `CorrectionProfile.create` — never writes JSON. “Reset to my result” when overridden. |
-| Save / Share | Full-res for **current mode** + current Strength. Android MediaStore + `ACTION_SEND` FileProvider; desktop save fallback. |
-| Comparison | `build_comparison_card` — “Normal vision” \| “How I see it”, brand footer, longest ≤2048. |
+| Modes | Default **Corrected** (whole image filtered). Divider starts at **0%** (handle at left); drag right to reveal original. Reset to 0% on Corrected↔Simulation and new pick. Original = no divider. |
+| Strength | Reloaded from disk on every Photos enter; percent-rounded. Preview-only. |
+| Save / Share | Full-res for **current mode** + current Strength. MediaStore + FileProvider / desktop fallback. |
+| Comparison | `build_comparison_card` — “Normal vision” \| “How I see it”, ≤2048. |
 
-Helpers: `image_pipeline.py` (`render_mode_rgb`, `build_comparison_card`, `severity_for_slider`, `divider_visible`), `photo_io.py` (`share_image`). Widgets: `BeforeAfterViewer`, `PhotoModeToolbar` (save+share), `PreviewSeverityBar`, `TextLinkButton`, `LoadingShimmer`.
+## Camera + Lens (shared live pipeline)
 
-Callbacks: `mode_cb` / `save_cb` / `share_cb` / `split_cb` / `change_cb` — never `on_<prop>` ObjectProperties.
+| Piece | Role |
+|-------|------|
+| `camera_source.py` | Desktop OpenCV webcam; `FakeFrameSource` for smoke; Android Camera4Kivy hook + runtime CAMERA permission |
+| `camera_pipeline.py` | BGR↔RGB, live downscale (~560), loupe median/zoom crop, `LabelSmoother`, `name_loupe_color` → `core.name_color` |
+| `screens/camera.py` | Full-bleed preview; mode pill; Strength; freeze/capture; loupe toggle; flip (Android) |
+| `screens/lens.py` | Redirects to Camera with loupe enabled (no duplicated pipeline) |
+| `screens/camera_widgets.py` | `LivePreviewStage`, `LoupeOverlay`, `CameraModeToolbar` |
+
+Frame loop: latest-frame drop (no queue) → bg thread process → single texture blit. Start on enter / stop on leave; app pause/resume. Default Corrected + Strength from saved profile when present.
+
+Helpers/widgets also: Photos `BeforeAfterViewer`, `PhotoModeToolbar`, `PreviewSeverityBar`, `TextLinkButton`, `LoadingShimmer`. Callbacks use `*_cb` names only.
 
 ## UI notes
 
 - Test flow: **checklist → Trivector trials (D-pad + can't see, 6 s timeout) → hue arrange → results**.
-- Trial UI: persistent shell; stimulus at **512 px** via `next_trial(size=…)` (no core edits), **linear** texture filter; label “Question N” (axis name hidden).
-- Results: type; severity “N / 100”; axis rows (label + ×cutoff + 1.0× tick); `PastelCard(auto_height=True)` disclaimer; before/after; Save (friendly copy only).
-- Photos: profile gate → pick → pinch/pan viewer + mode pill + severity preview → save.
+- Photos: disk profile reload → pick → Corrected @ split 0% → Strength / save-share.
+- Camera/Lens: shared live correction + loupe (`name_color`); Settings toggles FPS overlay.
 - `FloatingNavBar`: five identical slots; blue `+` FAB clamped inside pill.
-- Never name custom widgets after built-in Kivy widgets (`PillProgressBar`, `PreviewSeverityBar`, …).
-- `Icon` glyph sizing uses **`icon_size`** (not Kivy `size=` float) — see `design.md`.
+- Never name custom widgets after built-in Kivy widgets; `Icon` uses **`icon_size`**.

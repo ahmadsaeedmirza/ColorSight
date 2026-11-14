@@ -100,7 +100,23 @@ class RootShell(FloatLayout):
 
 class ColorSightApp(App):
     title = "ColorSight"
+    show_camera_fps = False
 
     def build(self):
         register_fonts()
         return RootShell()
+
+    def on_pause(self):
+        root = self.root
+        if root is not None and hasattr(root, "sm"):
+            scr = root.sm.get_screen(root.sm.current)
+            if hasattr(scr, "on_pause"):
+                scr.on_pause()
+        return True
+
+    def on_resume(self):
+        root = self.root
+        if root is not None and hasattr(root, "sm"):
+            scr = root.sm.get_screen(root.sm.current)
+            if hasattr(scr, "on_resume"):
+                scr.on_resume()

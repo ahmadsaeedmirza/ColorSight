@@ -73,6 +73,34 @@ Share uses `Intent.ACTION_SEND` + `FileProvider` URI (`photo_io._share_android`)
 
 Desktop Share falls back to saving into `Pictures/ColorSight/` and showing “Saved to your gallery”.
 
+### Camera / Lens
+
+```bash
+python -m unittest tests.test_camera_pipeline -v
+# Fake-frame UI smoke (no webcam required)
+set COLORSIGHT_FAKE_CAMERA=1   # PowerShell: $env:COLORSIGHT_FAKE_CAMERA=1
+python tools/smoke_camera_ui.py   # → SMOKE_CAMERA_OK …
+# Real webcam (desktop)
+python main.py   # open Camera; Settings → Show camera FPS
+```
+
+| Topic | Notes |
+|-------|--------|
+| Desktop | OpenCV `VideoCapture(0)`; falls back to synthetic frames if open fails |
+| Android | Runtime `CAMERA` via `request_camera_permission`; denied → rationale card + “Open settings”. Prefer Camera4Kivy (`camera4kivy` in `buildozer.spec`) |
+| Pipeline | Latest-frame drop; live longest ≈ **560 px**; bg process + blit; start on enter / stop on leave; pause/resume |
+| Capture | Saves current mode to ColorSight album (MediaStore / Pictures) — no paths in UI |
+| Lens | Nav item opens Camera with loupe on (shared widgets) |
+
+#### Measured FPS (desktop smoke / fake source)
+
+| Setup | Approx. processed FPS |
+|-------|------------------------|
+| FakeFrameSource @ 20 Hz, Corrected mode, 390×844 window (Intel UHD 620) | **~15–20** (poll 20 Hz; drops if still processing) |
+| Mid-range phone target | **15+** with live longest ≤560; enable Settings → Show camera FPS on device to record |
+
+Known limits: first OpenCV open can lag; Android Camera4Kivy preview wiring may need a device pass to attach the Preview widget callback into `AndroidCameraSource.push_frame_rgb`. Heavy Simulation + loupe on low-end devices may dip below 15 fps — drop frames rather than queue.
+
 ## Android packaging (Buildozer)
 
 Buildozer is typically run on **Linux** (or WSL2 / a CI Linux image). Native Windows Buildozer is not recommended.
@@ -125,7 +153,7 @@ Declared in `buildozer.spec` / AndroidManifest (via Buildozer):
 
 | Permission | Why |
 |------------|-----|
-| `CAMERA` | Live camera correction + magnifier (remaining Phase 1) |
+| `CAMERA` | Live Camera / Lens — request at runtime with rationale + settings fallback |
 | `READ_MEDIA_IMAGES` (API 33+) | Fallback gallery access on older flows |
 | `READ_EXTERNAL_STORAGE` | Pre-13 gallery fallback |
 | `WRITE_EXTERNAL_STORAGE` | Legacy pre-10 only; **not** required for MediaStore saves on Android 10+ |
@@ -168,9 +196,11 @@ Must ship with the APK:
 - [ ] Orientation / safe areas look acceptable on the target phone
 - [ ] Vision Test completes (checklist → Trivector → hue → results) and Save profile writes JSON
 - [ ] Result disclaimer visible (screening ≠ diagnosis; screens vary)
-- [ ] Photos: no-profile CTA → Test; with profile → pick → Original/Corrected/Simulation → Save appears in Gallery **ColorSight** album
+- [ ] Photos: no-profile CTA; with profile → Corrected @ 0% divider; Strength matches saved %; Save/Share
 - [ ] Photos on Android 13+: Photo Picker works without granting all-files storage
-- [ ] (Phase 1) Camera permission prompt and preview
+- [ ] Camera: permission rationale / deny → Open settings; live Corrected when profile exists
+- [ ] Camera: freeze/capture → ColorSight album; loupe names colors; Lens nav enables loupe
+- [ ] Settings: Show camera FPS toggles overlay; note measured fps on device
 
 ## Known issues / notes
 

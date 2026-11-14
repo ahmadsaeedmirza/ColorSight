@@ -95,15 +95,19 @@ class _Smoke(ColorSightApp):
         assert viewer._handle.opacity == 0
         tb._tap_mode("corrected")
         assert viewer._handle.opacity == 1
+        assert abs(viewer.split - 0.0) < 1e-6, viewer.split
         assert viewer._right_lbl.text == "Corrected"
         tb._tap_mode("simulation")
         assert viewer._handle.opacity == 1
+        assert abs(viewer.split - 0.0) < 1e-6
         assert viewer._right_lbl.text == "Simulation"
         log.append("modes_divider_ok")
 
-        # Drag divider
+        # Drag divider to reveal original
         viewer.split = 0.35
         viewer.split = 0.65
+        tb._tap_mode("corrected")
+        assert abs(viewer.split - 0.0) < 1e-6
         log.append("split_ok")
 
         # Strength change + reset

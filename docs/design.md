@@ -154,6 +154,7 @@ Apply the **same** clamped value to fill **and** matching shadow layers. Used by
 | `PreviewSeverityBar` (photos) | Strength track (**not** `Slider`); percent snap; `change_cb` — preview only |
 | `TextLinkButton` (photos) | “Reset to my result” text action |
 | `LoadingShimmer` (photos) | Thin animated bar while bg-thread preview/save runs |
+| `LivePreviewStage` / `LoupeOverlay` / `CameraModeToolbar` | Shared Camera/Lens live preview + loupe + controls |
 
 ## Screen list
 
@@ -162,17 +163,26 @@ Apply the **same** clamped value to fill **and** matching shadow layers. Used by
 | `welcome` | Big title, subtitle, dark arrow CTA, stacked pastel feature cards |
 | `home` | Header (menu + avatar), chips, pastel feature grid |
 | `test` | **Vision test** — checklist → Trivector Landolt C → hue arrange → results (Save profile) |
-| `photos` | **Image correction** — profile gate, pick, before/after, modes, save/share, comparison |
-| `camera` / `lens` / `profile` / `settings` | Placeholders (Phase 1 remaining) |
+| `photos` | **Image correction** — Corrected @ 0% divider by default, Strength, save/share, comparison |
+| `camera` | **Live correction** — full-bleed preview, modes, Strength, freeze/capture, loupe toggle |
+| `lens` | Redirect to Camera with loupe enabled |
+| `settings` | Debug FPS toggle + about |
+| `profile` | Placeholder (Phase 1 remaining) |
 
 ### Photos screen recipe
 
 - **No profile:** pink `PastelCard` + “Go to Vision Test” (never show paths).
 - **Empty:** pink card + large “Choose a photo”.
-- **Viewer:** pinch/pan; Original = full image (no divider); Corrected/Simulation = before/after with corner labels + ≥44 dp handle at 50%.
-- **Strength:** defaults to test result; hint + “Reset to my result” when changed; Simulation helper: “Adjust the strength until it matches how you see it.”
-- **Actions:** Save/Share current mode; Export comparison (“Normal vision” / “How I see it”); confirmations without paths.
+- **Viewer:** opens in Corrected with filter on the **whole** image (divider **0%**, handle at left, ≥44 dp, inside bounds). Drag right to reveal original. One-time session hint: “Drag the handle to compare with the original.”
+- **Strength:** reloaded from disk every enter; “Reset to my result” when changed.
+- **Actions:** Save/Share current mode; Export comparison; no paths in UI.
 - Bottom padding = `nav_clearance`.
+
+### Camera / Lens recipe
+
+- Full-bleed `LivePreviewStage` (contain, no distortion); floating dark mode pill + Strength + freeze/capture (+ flip on Android).
+- Loupe (~140 dp): zoom 2–4×, crosshair, lock on long-press, name pill via `core.name_color` (median 9×9 of **original** frame); corrected swatch when in Corrected mode.
+- Lens nav → Camera with loupe on. Respect `nav_clearance`.
 
 ### Test screen recipe
 

@@ -4,6 +4,18 @@ Newest entries first. Append after every prompt per `rules.md`.
 
 ---
 
+## 2026-11-14 — Photos split-0 default + Camera/Lens
+
+**Prompt:** Photos filter-on-by-default (divider 0%), disk profile reload + strength tests; Camera + Lens shared live pipeline; loupe/`name_color`; freeze/capture; FPS toggle. No `/core` changes.
+
+**Photos:** Default Corrected; `photos_default_split()=0` (full filtered; handle left, ≥44 dp inside bounds); reset split on Corrected/Simulation/new pick; one-time compare hint; always `CorrectionProfile.load(profile_path())` on enter; log `photos_strength …`; tests for 0.91→91 and 1.0→100.
+
+**Camera/Lens:** `camera_source` (OpenCV / Fake / Android+Camera4kivy stub), `camera_pipeline` helpers, `CameraScreen` + `LoupeOverlay`, `LensScreen` redirects with loupe on. Frame drop loop, pause/resume, Settings FPS toggle.
+
+**Verified:** 29 unit tests OK; `SMOKE_PHOTOS_OK`; `SMOKE_CAMERA_OK camera_default_ok … loupe_ok freeze_capture_ok lens_redirect_ok shutdown_ok`.
+
+---
+
 ## 2026-11-14 — Photos Strength, divider, save/share, comparison
 
 **Prompt:** Fix Strength default (91 not 100) + reset; divider hide on Original, show on Corrected/Simulation with labels + 44 dp hit; verify correction MAD; mode-aware Save/Share; “How I see it” comparison card; Simulation tuning hint. No `/core` changes.
