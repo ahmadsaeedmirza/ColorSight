@@ -144,14 +144,14 @@ class ArrowPad(BoxLayout):
         self.add_widget(cant)
 
     def _arrow(self, orient: str, icon_name: str):
-        from colorsight.theme.tokens import Fonts
         from colorsight.widgets import Icon
 
         btn = PrimaryButton(text="")
         btn.height = dp(56)
         btn.bg_color = Colors.surface
         btn.clear_widgets()
-        ic = Icon(icon_name, size=dp(28), color=Colors.text)
+        # icon_size is the glyph size in dp — never pass Kivy widget ``size=`` a float
+        ic = Icon(icon=icon_name, icon_size=28, color=Colors.text)
         btn.add_widget(ic)
         btn.on_press_cb = lambda *_ , o=orient: self._tap(o)
         return btn

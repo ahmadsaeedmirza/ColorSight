@@ -93,3 +93,4 @@ Naming: Lab nearest swatch + HSV neutrals.
 - Results: type, severity label + 0–100 bar, per-axis pastel bars, before/after swatches, disclaimer, Save (friendly copy only).
 - `FloatingNavBar`: five identical slots; blue `+` FAB clamped inside pill.
 - Never name custom widgets after built-in Kivy widgets (`PillProgressBar`, `ArrowPad`, …).
+- `Icon` glyph sizing uses **`icon_size`** (not Kivy `size=` float) — see `design.md`.

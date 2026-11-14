@@ -32,6 +32,7 @@ Requires NumPy + OpenCV (`opencv-python` or `opencv-python-headless`).
 - Headless smoke: `python tools/flow_trivector.py` → prints `FLOW_OK …`.
 - Saved profile path (logs/docs only): Kivy `user_data_dir` / `correction_profile.json` — UI shows a friendly confirmation, not the path.
 - Progress UI widget is `PillProgressBar` (not Kivy’s `ProgressBar`).
+- Arrow pad icons use `Icon(..., icon_size=28)` — do not pass `size=dp(28)` (Kivy crash).
 - Trivector gates: `python -m unittest tests.test_trivector -v`
 - Legacy plate gates (still required): `python -m unittest tests.test_plate_validation tests.test_plate_recognizability -v`
 - Full suite: `python -m unittest discover -s tests`

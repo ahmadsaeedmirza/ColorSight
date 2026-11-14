@@ -4,6 +4,18 @@ Newest entries first. Append after every prompt per `rules.md`.
 
 ---
 
+## 2026-11-14 — Fix ArrowPad Icon.size crash
+
+**Prompt:** Trivector start crashed with `ValueError: Icon.size must be a list or a tuple` from `ArrowPad._arrow` passing `size=dp(28)`.
+
+**Fix:** `Icon` already exposes **`icon_size`** (default 24). ArrowPad now uses `Icon(icon=…, icon_size=28)`. Added a clear `TypeError` if numeric `size=` is passed. Audited all `Icon(...)` call sites — only ArrowPad was wrong.
+
+**Verified:** Desktop flow Welcome → Home → Test checklist → trivector (arrows + can't see) → hue → results → save → `FLOW_OK`. 45 unit tests OK.
+
+**Docs/rules:** Icon sizing rule in `design.md` / `rules.md`.
+
+---
+
 ## 2026-11-14 — Replace plates with CCT Trivector
 
 **Prompt:** Swap live Vision Test to Cambridge Colour Test (Trivector) for type + severity; keep `plates.py` + tests as legacy; keep hue step; model-observer calibration + accuracy tests; checklist/results UI; no engine math changes.

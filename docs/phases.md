@@ -19,6 +19,7 @@
 | Plate generator (legacy) — dense packing, confusion palettes, validation + recognizability tests | Done (kept, not in live flow) |
 | Shape legibility — open counters, recognizability tests, contact sheet | Done |
 | Trivector core — u'v' axes, staircase, model-observer calibration, accuracy tests | Done |
+| ArrowPad Icon crash fix — use `icon_size`, not Kivy `size=` float | Done |
 | UI polish — result swatches, friendly save copy, nav slots + centered FAB | Done |
 
 ### Remaining in-app features

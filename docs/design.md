@@ -40,7 +40,18 @@ Registered as `Fonts.icons` (`MaterialIcons`). Use ligature names from `Icons` i
 | `arrow_forward` | `arrow_forward` | Welcome CTA |
 | `arrow_back` | `arrow_back` | Placeholder back |
 
-Helper: `colorsight.widgets.Icon` — consistent size, color, and font registration.
+Helper: `colorsight.widgets.Icon` — consistent glyph size, color, and font registration.
+
+### Icon sizing rule (mandatory)
+
+`Icon` is a Kivy `Label`. Kivy’s widget property **`size` must be `(width, height)`** — never a single float.
+
+| Do | Don’t |
+|----|--------|
+| `Icon(icon=Icons.home, icon_size=28)` | `Icon(..., size=dp(28))` |
+| `icon_size` = glyph size in dp (default **24**) | Passing numeric `size=` (crashes `ListProperty`) |
+
+`icon_size` drives `font_size` and a stable square layout box. Use `size=(w, h)` only when you intentionally set the widget box.
 
 ## Color tokens
 
@@ -118,7 +129,7 @@ Apply the **same** clamped value to fill **and** matching shadow layers. Used by
 
 | Widget | Role |
 |--------|------|
-| `Icon` | Material Icons ligature label |
+| `Icon` | Material Icons ligature label — size via **`icon_size`**, not Kivy `size=` float |
 | `RoundedCard` | Base card with clamped radius + soft shadow |
 | `PastelCard` | Colored note card + accent dot, title, subtitle |
 | `Chip` / `ChipRow` | Pill filters — selected = dark + **white** label; unselected = white + dark label, vertically centered |

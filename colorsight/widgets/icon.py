@@ -8,13 +8,23 @@ from colorsight.theme.tokens import Colors, Fonts, Icons
 
 
 class Icon(Label):
-    """Renders a Material Icons glyph by ligature name (e.g. ``menu``, ``home``)."""
+    """Renders a Material Icons glyph by ligature name (e.g. ``menu``, ``home``).
+
+    Use ``icon_size`` (numeric dp intent, default 24) for the glyph. Do **not**
+    pass Kivy's widget ``size=`` a single float — ``size`` must be ``(w, h)``.
+    """
 
     icon = StringProperty(Icons.home)
     icon_size = NumericProperty(24)
     color = ColorProperty(Colors.text)
 
     def __init__(self, icon=Icons.home, icon_size=24, color=None, **kwargs):
+        # Guard against size=28 / size=dp(28) which crashes ListProperty
+        if "size" in kwargs and not isinstance(kwargs["size"], (list, tuple)):
+            raise TypeError(
+                "Icon: pass glyph size as icon_size=… (e.g. icon_size=28). "
+                "Kivy widget size= must be a (width, height) list/tuple."
+            )
         kwargs.setdefault("size_hint", (None, None))
         super().__init__(**kwargs)
         self.icon = icon
