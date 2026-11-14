@@ -25,7 +25,7 @@ ColorSight/
 │   ├── storage.py          # user_data_dir profile path
 │   ├── screens/
 │   │   ├── test_screen.py  # Vision test flow (intro→plates→hue→results)
-│   │   └── test_widgets.py # ProgressBar, Numpad, HueStrip
+│   │   └── test_widgets.py # PillProgressBar, Numpad, HueStrip
 │   └── …
 └── docs/
 ```

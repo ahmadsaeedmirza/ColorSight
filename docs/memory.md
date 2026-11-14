@@ -4,6 +4,20 @@ Newest entries first. Append after every prompt per `rules.md`.
 
 ---
 
+## 2026-11-14 — Fix ProgressBar / Kivy style.kv collision
+
+**Prompt:** Crash on Test plates — `BuilderException` / missing `max` because custom `ProgressBar` collided with Kivy’s built-in. Rename, audit collisions, run full flow, document naming rule.
+
+**Fix:**
+- Renamed `ProgressBar` → `PillProgressBar` in `test_widgets.py` + `test_screen.py`.
+- Audited `colorsight/widgets` + `screens`: only collision was `ProgressBar` (`CameraScreen` / `Icon` / `Chip` are fine).
+- Also replaced deprecated `Image(allow_stretch/keep_ratio)` with `fit_mode`.
+- Automated flow: Welcome → Home → Test intro → plates → hue → results → save → `FLOW_OK`.
+
+**Docs/rules:** Never name custom widgets after built-in Kivy widgets.
+
+---
+
 ## 2026-11-14 — Vision Test feature (plates, hue, scoring, results)
 
 **Prompt:** Build Color Vision Test on Test screen — procedural Ishihara-style plates (no copyrighted images), 12–16 plate flow with numpad + can't-see, hue-arrangement severity step, scoring in `/core`, pastel results with before/after + Save profile + medical disclaimer. Update docs.
@@ -11,7 +25,7 @@ Newest entries first. Append after every prompt per `rules.md`.
 **Decisions:**
 - 14-plate `DEFAULT_BATTERY` in `core/plates.py` (control, RG, protan, deutan, blue-yellow palettes); circle packing + OpenCV digit masks.
 - Scoring in `core/scoring.py` → `TestResult` (normal / protanopia / deuteranopia / tritanopia + severity); hue MAD error blended into severity.
-- UI state machine in `test_screen.py` with `test_widgets` (ProgressBar, Numpad, HueStrip); profile via `CorrectionProfile` + `storage.profile_path()`.
+- UI state machine in `test_screen.py` with `test_widgets` (PillProgressBar, Numpad, HueStrip); profile via `CorrectionProfile` + `storage.profile_path()`.
 - Explicit result disclaimer: screening only; phone screens vary.
 - Spatial-hash packing so battery prep is ~2s at 360px.
 

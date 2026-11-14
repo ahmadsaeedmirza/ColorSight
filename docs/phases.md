@@ -15,6 +15,7 @@
 | `/core` Machado simulation + daltonization + `CorrectionProfile` + `name_color` | Done |
 | Unit tests for engine | Done |
 | **Vision Test UI** — procedural plates, numpad, hue arrange, scoring, results, save profile | Done |
+| Test crash fix — `PillProgressBar` rename (no Kivy builtin name collision) | Done |
 
 ### Remaining in-app features
 

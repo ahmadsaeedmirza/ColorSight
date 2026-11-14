@@ -24,7 +24,7 @@ from core import (
 from colorsight.storage import profile_path
 from colorsight.theme.tokens import Colors, Fonts, Icons, Spacing
 from colorsight.widgets import PastelCard, PrimaryButton, RoundIconButton
-from colorsight.screens.test_widgets import HueStrip, Numpad, ProgressBar, numpy_to_texture
+from colorsight.screens.test_widgets import HueStrip, Numpad, PillProgressBar, numpy_to_texture
 
 
 class TestScreen(Screen):
@@ -160,7 +160,7 @@ class TestScreen(Screen):
         total = len(self._battery)
         spec, img = self._battery[self._index]
 
-        progress = ProgressBar(progress=(self._index) / total)
+        progress = PillProgressBar(progress=(self._index) / total)
         self._progress = progress
         step = Label(
             text=f"Plate {self._index + 1} of {total}",
@@ -173,7 +173,7 @@ class TestScreen(Screen):
         )
         step.bind(size=lambda *_: setattr(step, "text_size", step.size))
 
-        plate_img = Image(size_hint_y=None, height=dp(260), allow_stretch=True, keep_ratio=True)
+        plate_img = Image(size_hint_y=None, height=dp(260), fit_mode="contain")
         plate_img.texture = numpy_to_texture(img)
         self._plate_image = plate_img
 
@@ -263,7 +263,7 @@ class TestScreen(Screen):
         done.bg_color = Colors.accent_blue
         done.on_press_cb = lambda *_: self._finish()
 
-        progress = ProgressBar(progress=0.92)
+        progress = PillProgressBar(progress=0.92)
         self._body.add_widget(
             self._padded_scroll(
                 self._header("Almost done"),
@@ -388,7 +388,7 @@ class TestScreen(Screen):
                 halign="left",
             )
             lbl.bind(size=lambda *_ , L=lbl: setattr(L, "text_size", L.size))
-            img = Image(size_hint_y=None, height=dp(64), allow_stretch=True, keep_ratio=False)
+            img = Image(size_hint_y=None, height=dp(64), fit_mode="fill")
             img.texture = numpy_to_texture(arr)
             row.add_widget(lbl)
             row.add_widget(img)

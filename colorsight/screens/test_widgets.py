@@ -25,7 +25,9 @@ def numpy_to_texture(rgb: np.ndarray) -> Texture:
     return tex
 
 
-class ProgressBar(Widget):
+class PillProgressBar(Widget):
+    """Pill-shaped progress indicator (do not name after Kivy ``ProgressBar``)."""
+
     def __init__(self, progress=0.0, **kwargs):
         super().__init__(**kwargs)
         self.size_hint_y = None

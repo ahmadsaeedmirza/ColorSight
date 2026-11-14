@@ -4,6 +4,12 @@ Reference language: vibrant pastel **notes app** — light canvas, bold rounded 
 
 Color math (simulation, correction, naming) lives in `/core` and is documented in `architecture.md` — this file stays UI/visual only. Future screens should call `core` APIs rather than reimplement transforms.
 
+## Naming rule (Kivy)
+
+**Never name a custom widget class after a built-in Kivy widget** (`ProgressBar`, `Button`, `Label`, `Slider`, `Image`, `Switch`, `TextInput`, `CheckBox`, `Spinner`, `Popup`, `ScrollView`, layout class names, etc.).
+
+Kivy auto-applies `style.kv` rules by class name. A custom `ProgressBar` inherits the stock rule and crashes (e.g. missing `max`). Prefer prefixed names: `PillProgressBar`, `PrimaryButton`, `PastelCard`, `HueStrip`.
+
 ## Brand & typography
 
 | Token | Value |
@@ -119,7 +125,7 @@ Apply the **same** clamped value to fill **and** matching shadow layers. Used by
 | `PillSearchBar` | Capsule search with Material `search` icon |
 | `FloatingNavBar` | Dark pill, equal slots, labels for all items, raised blue `add` FAB; fits width with side margins |
 | `PrimaryButton` / `RoundIconButton` | Filled CTA / circular icon button |
-| `ProgressBar` (test) | Thin capsule progress for plate flow |
+| `PillProgressBar` (test) | Thin capsule progress for plate flow (**not** named `ProgressBar` — avoids Kivy builtin clash) |
 | `Numpad` (test) | Large digit pad + Can't see anything |
 | `HueStrip` (test) | Tap-to-swap hue tiles for arrangement step |
 
