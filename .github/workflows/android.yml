@@ -1,0 +1,112 @@
+# Cloud Android debug APK via Buildozer (no local WSL required).
+name: Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - build-apk
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: |
+          set -euo pipefail
+          echo "Before:"
+          df -h
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /opt/ghc || true
+          sudo rm -rf /opt/hostedtoolcache/CodeQL || true
+          sudo rm -rf /usr/local/share/boost || true
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY" || true
+          sudo apt-get clean || true
+          echo "After:"
+          df -h
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install apt build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            git zip unzip openjdk-17-jdk \
+            autoconf libtool pkg-config \
+            zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 \
+            cmake libffi-dev libssl-dev \
+            build-essential ccache libltdl-dev
+
+      - name: Install Buildozer + Cython
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "buildozer" "cython==0.29.36"
+
+      - name: Cache Buildozer / p4a
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.buildozer
+            ./.buildozer
+          key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
+          restore-keys: |
+            buildozer-${{ runner.os }}-
+
+      - name: Build debug APK
+        id: build
+        run: |
+          set -euo pipefail
+          mkdir -p bin dist
+          buildozer -v android debug 2>&1 | tee buildozer-ci.log
+          ls -la bin/*.apk
+
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: colorsight-apk
+          path: bin/*.apk
+          if-no-files-found: error
+
+      - name: Upload build log tail (failure)
+        if: failure()
+        run: |
+          set -euo pipefail
+          mkdir -p ci-failure
+          if [ -f buildozer-ci.log ]; then
+            tail -n 500 buildozer-ci.log > ci-failure/buildozer-tail.txt
+          else
+            echo "No buildozer-ci.log captured" > ci-failure/buildozer-tail.txt
+          fi
+          # Also grab common p4a log fragments if present
+          find .buildozer -name "*.log" -type f 2>/dev/null | head -20 | while read -r f; do
+            base=$(basename "$f")
+            tail -n 200 "$f" > "ci-failure/extra-${base}.txt" || true
+          done
+
+      - name: Upload failure logs artifact
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: colorsight-build-failure-log
+          path: ci-failure/
+          if-no-files-found: warn

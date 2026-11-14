@@ -103,9 +103,52 @@ python main.py   # open Camera; Settings → Show camera FPS
 
 Known limits: first OpenCV open can lag; Android Camera4Kivy preview wiring may need a device pass to attach the Preview widget callback into `AndroidCameraSource.push_frame_rgb`. Heavy Simulation + loupe on low-end devices may dip below 15 fps — drop frames rather than queue.
 
-## Android packaging (Buildozer) — WSL2 (Ubuntu) from Windows
+## Cloud build (GitHub Actions) — preferred
 
-Native Windows Buildozer is **not** recommended. Use **WSL2 + Ubuntu**.
+Build the debug APK in the cloud so you do **not** need a local Buildozer/WSL toolchain.
+
+### Run the workflow
+
+1. Push this repo to GitHub (private is fine) under **ahmadsaeedmirza**.
+2. Open **Actions → Android APK**.
+3. Either:
+   - **Run workflow** (`workflow_dispatch`), or
+   - Push any commit to a branch named **`build-apk`**.
+4. Wait for the job (first run can take **1–3+ hours**; later runs reuse `~/.buildozer` + `./.buildozer` cache).
+
+Workflow file: `.github/workflows/android.yml` (ubuntu-22.04, Java 17, `cython==0.29.36`, `buildozer -v android debug`, timeout 360 min).
+
+### Download the APK
+
+On a **successful** run: open the workflow run → **Artifacts** → download **`colorsight-apk`** (contains `bin/*.apk`, arm64-v8a debug).
+
+Install with:
+
+```bash
+adb install -r colorsight-*-arm64-v8a-debug.apk
+```
+
+### If the build fails
+
+1. Open the failed run → **Artifacts** → download **`colorsight-build-failure-log`** (last **500** lines of `buildozer-ci.log`, plus any extra p4a log tails).
+2. Match the error to the troubleshooting table below (FreeType, NDK, charset-normalizer, pins).
+3. Fix `buildozer.spec` / docs as needed, push, and re-run the workflow (cache makes reruns faster).
+
+### Known cloud / Buildozer pitfalls
+
+| Pitfall | What we do |
+|---------|------------|
+| FreeType download blocked (Savannah) | Manual SourceForge `.tar.gz` + `.mark-…` (see troubleshooting) — rare on GitHub runners; more common on restricted networks |
+| NDK 25b / NumPy `unordered_map` | Use **`android.ndk = 28c`** |
+| `charset-normalizer` android wheel on host pip | Pin **`charset-normalizer==3.4.9`** |
+| Corrupt Buildozer / p4a venv | Delete the bad env under `.buildozer/` (or clear the Actions cache for `buildozer-*`) and rebuild clean |
+| Old kivy/numpy/pillow pins on Python 3.14 | Keep those **unpinned**; single `version = 0.1.0` (no `version.regex`) |
+
+Local WSL steps below remain as a **fallback** if Actions is unavailable.
+
+## Android packaging (Buildozer) — WSL2 fallback (Ubuntu) from Windows
+
+Native Windows Buildozer is **not** recommended. Prefer the **Cloud build** above; use **WSL2 + Ubuntu** only as a fallback.
 
 ### 1. Install WSL2 (Windows PowerShell as Administrator)
 
@@ -153,7 +196,7 @@ chmod +x tools/build_android.sh
 
 First run downloads the Android SDK/NDK — expect **30–90+ minutes**. Later builds are much faster. Output APK:
 
-- `bin/colorsight-<version>-arm64-v8a_armeabi-v7a-debug.apk`
+- `bin/colorsight-<version>-arm64-v8a-debug.apk` (64-bit only)
 - Copied to `dist/` by the script
 
 ### 5. USB debugging + install with adb
@@ -189,19 +232,26 @@ Sign with a proper keystore before Play Store distribution (not configured yet).
 | Manifest `<provider>` | Merge `assets/android/fileprovider_snippet.xml` into the generated manifest if share fails (p4a may not auto-merge; verify on device) |
 | `core/*`, `colorsight/*`, `assets/**` | `source.include_patterns` |
 | Icon / splash | `assets/icon.png`, `presplash.png`, adaptive foreground/background |
-| Portrait + api 33 / min 24 / arm64+armeabi | `buildozer.spec` |
+| Portrait + api 33 / min 24 / **arm64-v8a only** + NDK **28c** | `buildozer.spec` (64-bit APK; covers almost all current phones) |
 
 ### Troubleshooting (typical failures)
 
 | Symptom | What to try |
 |---------|-------------|
-| OpenCV recipe fails | Pin `opencv` in requirements; clean `.buildozer` and rebuild; ensure NDK 25b matches `android.ndk` |
+| **download.savannah.gnu.org unreachable (FreeType)** | p4a cannot fetch FreeType from Savannah. Manual workaround: download `freetype-2.14.1.tar.xz` from [downloads.sourceforge.net/freetype/freetype2/2.14.1/](https://downloads.sourceforge.net/freetype/freetype2/2.14.1/); convert it to `.tar.gz`; place it in `.buildozer/android/platform/build-arm64-v8a/packages/freetype/` (or `build-arm64-v8a_armeabi-v7a/…` if you still have a dual-arch tree); then `touch .mark-freetype-2.14.1.tar.gz` in that same folder and rebuild |
+| **Version pins break the build on new p4a** | python-for-android **2026.05.09** defaults to **Python 3.14**. Old pins (`kivy==2.3.0`, `numpy==1.26.4`, `pillow==10.4.0`) fail on 3.14; the numpy pin also fails because the recipe looks for git tag `1.26.4` while the tag is `v1.26.4`. Fix: leave those unpinned in `buildozer.spec` (desktop `requirements.txt` alone). The only intentional pin is `charset-normalizer==3.4.9` (see row below). Clean `.buildozer` if a failed pin left a bad cache |
+| **NumPy fails with `no template named unordered_map`** | NDK **25b** libc++ is too old for NumPy 2.3 (`unique.cpp` missing an include). Use **`android.ndk = 28c`** (what p4a 2026.05.09 recommends). Clean the NDK/build cache and rebuild |
+| **`charset-normalizer` / “is not a supported wheel on this platform”** | p4a may resolve **3.5.2** to an `android_24_arm64_v8a` wheel that **host pip cannot install**. Pin the last pure-Python release: `charset-normalizer==3.4.9` in `buildozer.spec` requirements (keep other deps unpinned) |
+| OpenCV recipe fails | Keep unpinned `opencv` in requirements; clean `.buildozer` and rebuild; ensure NDK **28c** matches `android.ndk` |
 | NDK/SDK download stuck | Check disk space (~20+ GB); retry; set `ANDROIDSDK` / `ANDROIDNDK` if you already have them |
-| Cython / Kivy mismatch | Use `kivy==2.3.0` as in `buildozer.spec`; `pip3 install --user 'cython<3'` if needed for older recipes |
+| Cython / Kivy mismatch | Prefer unpinned `kivy` (recipe picks a 3.14-compatible build); `pip3 install --user 'cython<3'` only if an older recipe still needs it |
 | Camera4Kivy missing classes | Confirm `camera4kivy` in requirements; add/update gradle deps per Camera4Kivy docs; clean build |
 | Permission denied at runtime | CAMERA / READ_MEDIA_IMAGES declared; app requests CAMERA at runtime — use Settings → Open settings card if denied |
 | Share crashes | Ensure FileProvider authority `${applicationId}.fileprovider` and `@xml/file_paths` are in the final APK manifest |
 | `buildozer` not found | `pip3 install --user buildozer` and ensure `~/.local/bin` is on `PATH` |
+| Corrupt / half-built p4a venv | Delete `.buildozer/android/platform/build-*/build/venv` (or the whole `.buildozer` tree) and rebuild; on Actions, clear the `buildozer-*` cache then re-run |
+
+**NumPy on Android vs desktop:** p4a’s default numpy is **2.x**, which may differ from an older desktop pin. After bumping Android recipes, run `python -m unittest discover -s tests` against the latest numpy on desktop to confirm `/core` still passes (result logged in `memory.md`).
 
 ## Permissions
 
@@ -262,6 +312,8 @@ Must ship with the APK:
 ## Known issues / notes
 
 - **Buildozer on Windows**: use WSL2 (above); expect long first builds.
+- **p4a 2026.05.09**: defaults to Python 3.14; keep recipe deps unpinned except `charset-normalizer==3.4.9`; use NDK **28c** and **arm64-v8a only** (see troubleshooting).
+- **APK is 64-bit only** (`arm64-v8a`) — covers almost all current phones; no `armeabi-v7a` slice.
 - **Python 3.13 desktop**: if Kivy wheels fail, use 3.11/3.12 in the venv.
 - **Camera4Kivy**: desktop uses OpenCV; Android Preview widget callback may need a device pass to fully wire `AndroidCameraSource.push_frame_rgb`.
 - **FileProvider**: resources are packaged; if share fails, manually merge `fileprovider_snippet.xml`.
@@ -270,7 +322,8 @@ Must ship with the APK:
 
 ## `buildozer.spec` highlights
 
-- Title **ColorSight**; `org.colorsight.colorsight`; version from `colorsight/__init__.py`
-- Portrait; api 33 / min 24; `arm64-v8a,armeabi-v7a`
-- Requirements pinned: `kivy==2.3.0`, `numpy==1.26.4`, `pillow==10.4.0`, opencv, pyjnius, android, camera4kivy
-- Icon / adaptive icon / cream `#F6F4F1` splash; FileProvider resources; `core/*` + `colorsight/*` + `assets/**`
+- Title **ColorSight**; `org.colorsight.colorsight`; single **`version = 0.1.0`** (no `version.regex` / `version.filename`)
+- Portrait; api 33 / min 24; **`android.archs = arm64-v8a`** (64-bit only); **`android.ndk = 28c`**
+- Requirements: `python3,kivy,numpy,opencv,pillow,pyjnius,android,camera4kivy,charset-normalizer==3.4.9` — do not re-add old kivy/numpy/pillow `==` pins
+- CAMERA + READ_MEDIA_IMAGES (+ legacy storage); FileProvider via `android.add_resources`; icon / adaptive / cream splash
+- Cloud CI: `.github/workflows/android.yml` (manual + `build-apk` branch)

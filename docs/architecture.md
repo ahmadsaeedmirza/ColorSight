@@ -7,7 +7,7 @@
 | **Python 3** | App language | Course/project fit; NumPy/OpenCV ecosystem |
 | **Kivy** | UI | Desktop + Android via Buildozer; custom pastel UI |
 | **NumPy / OpenCV / Pillow** | Color + stimuli | CVD math; CIE u'v'; Landolt C / legacy plates |
-| **Buildozer** | Android packaging | Kivy → APK |
+| **Buildozer** / **p4a** / **GHA** | Android packaging | Preferred: GitHub Actions (`.github/workflows/android.yml`). p4a **2026.05.09** → Python **3.14**, NDK **28c**, **arm64-v8a only**; recipe deps **unpinned** except `charset-normalizer==3.4.9` (see `production.md`) |
 
 ## Folder structure
 

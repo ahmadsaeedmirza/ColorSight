@@ -23,6 +23,10 @@
 | **Settings** — About, Privacy, Display tips, FPS debug | Done |
 | First-run Welcome → test; later launches → Home; Android back | Done |
 | Buildozer.spec + icons/splash + WSL build guide + `tools/build_android.sh` | Done |
+| Buildozer requirements unpinned for p4a 2026.05.09 / Python 3.14 | Done |
+| Buildozer NDK 28c + arm64-v8a-only APK | Done |
+| Buildozer pin `charset-normalizer==3.4.9` (host-pip android wheel) | Done |
+| GitHub Actions cloud Android APK workflow | Done |
 
 Stack: NumPy + OpenCV in `core/`, Kivy UI in `colorsight/`, Buildozer packaging.
 

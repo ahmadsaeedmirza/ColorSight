@@ -1,0 +1,6 @@
+* text=auto
+
+# Linux LF for Buildozer / shell scripts (WSL + GitHub Actions)
+buildozer.spec text eol=lf
+tools/*.sh text eol=lf
+.github/workflows/*.yml text eol=lf

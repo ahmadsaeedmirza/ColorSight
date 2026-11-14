@@ -4,6 +4,51 @@ Newest entries first. Append after every prompt per `rules.md`.
 
 ---
 
+## 2026-11-15 — GitHub Actions cloud Android build
+
+**Prompt:** Cloud Android build via GitHub Actions; never require local builds. No `/core` / vision-test / existing-test changes.
+
+**Workflow:** `.github/workflows/android.yml` — `workflow_dispatch` + push to `build-apk`; `ubuntu-22.04`; timeout 360; free disk; Java 17 + apt deps; `buildozer` + `cython==0.29.36`; cache `~/.buildozer` + `./.buildozer`; `buildozer -v android debug`; artifact `colorsight-apk`; on failure upload last 500 log lines.
+
+**Spec / repo hygiene:** `buildozer.spec` single `version = 0.1.0` (removed regex/filename); requirements/arch/ndk/permissions/FileProvider unchanged as required. `.gitattributes` LF for `buildozer.spec` + `tools/*.sh`. `.gitignore` for `.venv`, `.buildozer`, `bin`, `dist`, `debug`, `__pycache__`, `*.pyc`. Deleted root `debug_*.png`.
+
+**Docs:** `production.md` **Cloud build** section (run, download APK, failure log, pitfalls: FreeType, NDK 28c, charset-normalizer pin, corrupt venv); WSL kept as fallback. `rules.md` / `architecture.md` / `phases.md` / this entry.
+
+---
+
+## 2026-11-15 — Pin charset-normalizer==3.4.9 for Android build
+
+**Prompt:** Add `charset-normalizer==3.4.9` to `buildozer.spec` requirements — p4a resolves 3.5.2 to an `android_24_arm64_v8a` wheel that host pip cannot install. No `/core` / vision-test / test changes.
+
+**Fix:** `requirements = python3,kivy,numpy,opencv,pillow,pyjnius,android,camera4kivy,charset-normalizer==3.4.9` (only this pin; other deps stay unpinned).
+
+**Docs:** `production.md` troubleshooting row; highlights + `rules.md` / `architecture.md` / `phases.md` / this entry.
+
+---
+
+## 2026-11-15 — NDK 28c + arm64-v8a only
+
+**Prompt:** Set `android.archs = arm64-v8a` and `android.ndk = 28c` (p4a 2026.05.09 recommended NDK; 25b fails NumPy 2.3 libc++). Document troubleshooting; note 64-bit-only APK. No `/core` / vision-test / test changes.
+
+**`buildozer.spec`:** `android.ndk = 28c`; `android.archs = arm64-v8a` (dropped `armeabi-v7a`).
+
+**Docs:** `production.md` — troubleshooting “NumPy fails with no template named unordered_map → use NDK 28c”; APK name / highlights / known issues updated for 64-bit-only; FreeType path notes `build-arm64-v8a`. `rules.md`, `architecture.md`, `phases.md`, this entry.
+
+---
+
+## 2026-11-15 — buildozer.spec unpinned for p4a 2026.05.09 / Python 3.14
+
+**Prompt:** Fix Android `requirements` for current python-for-android (release 2026.05.09, default Python 3.14): remove version pins; document FreeType Savannah workaround + pin-breakage; confirm `/core` on latest numpy. Leave desktop `requirements.txt` alone; no `/core` / vision-test / existing-test changes.
+
+**`buildozer.spec`:**  
+`requirements = python3,kivy,numpy,opencv,pillow,pyjnius,android,camera4kivy` (no `==` pins). Old `kivy==2.3.0` / `numpy==1.26.4` / `pillow==10.4.0` break on 3.14; numpy pin also fails because the recipe looks for git tag `1.26.4` vs real tag `v1.26.4`.
+
+**Docs:** `production.md` troubleshooting rows for (1) FreeType via SourceForge `.tar.gz` + `.mark-…` marker, (2) version pins on new p4a; highlights + known-issues updated. `rules.md` Android-requirements note. Desktop `requirements.txt` untouched.
+
+**NumPy check:** Desktop venv already on / upgraded to **numpy 2.5.4**; `python -m unittest discover -s tests` → **76 OK**. `/core` works with numpy 2.x (same major family p4a will pull by default).
+
+---
+
 ## 2026-11-14 — UI-only: chips, D-pad, headers
 
 **Prompt:** Fix Home Chip wrap (“Camer/a”); inverted-T Vision Test D-pad + desktop arrow keys; header back/title gap + Settings top inset; narrow desktop pass; update docs. Do **not** touch `/core`, staircase, thresholds, scoring, or existing tests.

@@ -8,17 +8,19 @@ source.include_exts = py,png,jpg,jpeg,kv,atlas,ttf,otf,md,txt,xml
 source.include_patterns = assets/*,assets/fonts/*,assets/icons/*,assets/android/*,docs/*,colorsight/*,core/*
 
 version = 0.1.0
-version.regex = __version__ = ['"](.*)['"]
-version.filename = %(source.dir)s/colorsight/__init__.py
 
-# Desktop deps in requirements.txt; Android recipes (pinned where recipes allow):
-requirements = python3,kivy==2.3.0,numpy==1.26.4,opencv,pillow==10.4.0,pyjnius,android,camera4kivy
+# Desktop deps stay in requirements.txt. Android: leave kivy/numpy/pillow/etc.
+# unpinned for p4a 2026.05.09 / Python 3.14. Exception: pin charset-normalizer
+# to the last pure-Python release — 3.5.2 resolves to an android_24_arm64_v8a
+# wheel that host pip cannot install ("is not a supported wheel on this platform").
+requirements = python3,kivy,numpy,opencv,pillow,pyjnius,android,camera4kivy,charset-normalizer==3.4.9
 
 orientation = portrait
 fullscreen = 0
 android.api = 33
 android.minapi = 24
-android.ndk = 25b
+# p4a 2026.05.09 recommends NDK 28c; 25b fails NumPy 2.3 (libc++ unique.cpp).
+android.ndk = 28c
 android.accept_sdk_license = True
 
 # CAMERA for live preview; READ_MEDIA_IMAGES for gallery fallback.
@@ -26,7 +28,8 @@ android.accept_sdk_license = True
 # READ/WRITE_EXTERNAL_STORAGE kept for API < 29 devices only.
 android.permissions = CAMERA,READ_MEDIA_IMAGES,READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE
 
-android.archs = arm64-v8a,armeabi-v7a
+# 64-bit only — covers almost all current phones; skips armeabi-v7a build time.
+android.archs = arm64-v8a
 android.allow_backup = True
 
 # FileProvider paths for share sheet
