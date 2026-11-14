@@ -4,6 +4,29 @@ Newest entries first. Append after every prompt per `rules.md`.
 
 ---
 
+## 2026-11-14 — Vision Test UI polish (D-pad, stim, results)
+
+**Prompt:** UI-only — D-pad centering/overlap; “Question N”; crisp stim + less lag; results disclaimer/axis labels/severity number. No `/core` or test changes.
+
+**D-pad:** `ArrowKey` FloatLayout (76 dp, clamped radii, shadow, press opacity); 3×3 cross with empty center; full-width “I can't see it”; gap under prompt.
+
+**Trial:** Persistent shell (no tree rebuild); label “Question N”; stim `size=512` + linear texture blit reuse; timeout unchanged.
+
+**Results:** `PastelCard(auto_height=True)` disclaimer wrap; `AxisBars` rows with Protan/Deutan/Tritan + ×cutoff + 1.0× tick; `SeverityBar` shows “N / 100”.
+
+**Timing (profiled on desktop flow):**
+
+| Metric | Before (approx.) | After |
+|--------|------------------|-------|
+| UI tree per trial | Full `_clear` + rebuild ScrollView/pad/icons | Persistent shell |
+| Texture apply | New texture each trial | Reused blit + linear filter |
+| Blit-only avg | — | **~1.0 ms** |
+| Total trial step avg (incl. core `next_trial` @ 512) | — | ~386 ms (dominated by stimulus generate, not UI) |
+
+**Verified:** FLOW_OK at 360×640 and 900×700. Core/tests untouched.
+
+---
+
 ## 2026-11-14 — Fix ArrowPad Icon.size crash
 
 **Prompt:** Trivector start crashed with `ValueError: Icon.size must be a list or a tuple` from `ArrowPad._arrow` passing `size=dp(28)`.

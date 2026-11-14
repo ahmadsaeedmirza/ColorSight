@@ -20,6 +20,7 @@
 | Shape legibility — open counters, recognizability tests, contact sheet | Done |
 | Trivector core — u'v' axes, staircase, model-observer calibration, accuracy tests | Done |
 | ArrowPad Icon crash fix — use `icon_size`, not Kivy `size=` float | Done |
+| Vision Test UI polish — D-pad, Question N, crisp stim blit, results labels/auto-height | Done |
 | UI polish — result swatches, friendly save copy, nav slots + centered FAB | Done |
 
 ### Remaining in-app features

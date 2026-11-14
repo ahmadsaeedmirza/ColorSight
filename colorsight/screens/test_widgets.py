@@ -3,25 +3,35 @@
 from __future__ import annotations
 
 import numpy as np
-from kivy.graphics import Color, RoundedRectangle
+from kivy.animation import Animation
+from kivy.graphics import Color, Ellipse, Line, RoundedRectangle
 from kivy.graphics.texture import Texture
 from kivy.metrics import dp
+from kivy.uix.anchorlayout import AnchorLayout
 from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.floatlayout import FloatLayout
+from kivy.uix.gridlayout import GridLayout
+from kivy.uix.label import Label
 from kivy.uix.widget import Widget
 
 from colorsight.theme.geometry import clamped_radii
-from colorsight.theme.tokens import Colors
-from colorsight.widgets import PrimaryButton
+from colorsight.theme.tokens import Colors, Fonts
+from colorsight.widgets import Icon, PrimaryButton
+from colorsight.theme.tokens import Icons
 
 
-def numpy_to_texture(rgb: np.ndarray) -> Texture:
-    """HxWx3 RGB uint8 → Kivy texture (flipped for Image)."""
-    arr = np.ascontiguousarray(rgb, dtype=np.uint8)
+def numpy_to_texture(rgb: np.ndarray, existing: Texture | None = None) -> Texture:
+    """HxWx3 RGB uint8 → Kivy texture with linear filtering (reuses ``existing`` when size matches)."""
+    arr = np.ascontiguousarray(rgb[::-1], dtype=np.uint8)  # flip once in NumPy
     h, w = arr.shape[:2]
-    tex = Texture.create(size=(w, h), colorfmt="rgb")
+    if existing is not None and tuple(existing.size) == (w, h):
+        tex = existing
+    else:
+        tex = Texture.create(size=(w, h), colorfmt="rgb")
+        tex.mag_filter = "linear"
+        tex.min_filter = "linear"
     tex.blit_buffer(arr.tobytes(), colorfmt="rgb", bufferfmt="ubyte")
-    tex.flip_vertical()
     return tex
 
 
@@ -51,7 +61,7 @@ class PillProgressBar(Widget):
 
 
 class Numpad(BoxLayout):
-    """Large number pad + can't-see + backspace + submit."""
+    """Large number pad + can't-see + backspace + submit (legacy)."""
 
     def __init__(self, on_digit=None, on_clear=None, on_cant_see=None, on_submit=None, **kwargs):
         super().__init__(**kwargs)
@@ -113,28 +123,104 @@ class Numpad(BoxLayout):
             self._on_submit()
 
 
+ARROW_KEY_DP = 76
+
+
+class ArrowKey(ButtonBehavior, FloatLayout):
+    """White rounded key with centered Material Icon + soft shadow + press feedback."""
+
+    def __init__(self, orient: str, icon_name: str, on_orient=None, **kwargs):
+        super().__init__(**kwargs)
+        self.size_hint = (None, None)
+        side = dp(ARROW_KEY_DP)
+        self.size = (side, side)
+        self._orient = orient
+        self._on_orient = on_orient
+        self._pressed = False
+
+        self._icon = Icon(icon=icon_name, icon_size=28, color=Colors.text)
+        self._icon.size_hint = (None, None)
+        self._icon.size = (dp(32), dp(32))
+        self.add_widget(self._icon)
+
+        self.bind(pos=self._layout, size=self._layout)
+        self._layout()
+
+    def _layout(self, *_a):
+        self.canvas.before.clear()
+        radii = clamped_radii(dp(18), self.width, self.height)
+        with self.canvas.before:
+            Color(*Colors.shadow)
+            RoundedRectangle(
+                pos=(self.x, self.y - dp(2)),
+                size=self.size,
+                radius=radii,
+            )
+            fill = (0.96, 0.96, 0.96, 1) if self._pressed else Colors.surface
+            Color(*fill)
+            RoundedRectangle(pos=self.pos, size=self.size, radius=radii)
+        # Center icon
+        self._icon.center = self.center
+
+    def on_press(self):
+        self._pressed = True
+        self._layout()
+        Animation.cancel_all(self)
+        Animation(opacity=0.88, d=0.06).start(self)
+
+    def on_release(self):
+        self._pressed = False
+        self._layout()
+        Animation.cancel_all(self)
+        Animation(opacity=1.0, d=0.10).start(self)
+        if callable(self._on_orient):
+            self._on_orient(self._orient)
+
+
 class ArrowPad(BoxLayout):
-    """Large up/down/left/right arrows + can't-see for Landolt C 4-AFC."""
+    """D-pad cross: Up / Left·Right / Down + full-width “I can't see it”."""
 
     def __init__(self, on_orient=None, on_cant_see=None, **kwargs):
-        from colorsight.theme.tokens import Icons
-
         super().__init__(**kwargs)
         self.orientation = "vertical"
-        self.spacing = dp(8)
+        self.spacing = dp(10)
         self.size_hint_y = None
-        self.height = dp(220)
+        key = dp(ARROW_KEY_DP)
+        gap = dp(10)
+        # 3 key rows + can't-see
+        self.height = key * 3 + gap * 2 + dp(48) + dp(10)
         self._on_orient = on_orient
         self._on_cant_see = on_cant_see
 
-        mid = BoxLayout(spacing=dp(8), size_hint_y=None, height=dp(56))
-        mid.add_widget(self._arrow("left", Icons.arrow_back))
-        mid.add_widget(Widget())
-        mid.add_widget(self._arrow("right", Icons.arrow_forward))
+        grid = GridLayout(
+            cols=3,
+            rows=3,
+            spacing=gap,
+            size_hint=(None, None),
+            size=(key * 3 + gap * 2, key * 3 + gap * 2),
+        )
+        # Row 0: empty | Up | empty
+        grid.add_widget(Widget(size_hint=(None, None), size=(key, key)))
+        grid.add_widget(ArrowKey("up", Icons.arrow_upward, on_orient=self._tap))
+        grid.add_widget(Widget(size_hint=(None, None), size=(key, key)))
+        # Row 1: Left | empty | Right
+        grid.add_widget(ArrowKey("left", Icons.arrow_back, on_orient=self._tap))
+        grid.add_widget(Widget(size_hint=(None, None), size=(key, key)))
+        grid.add_widget(ArrowKey("right", Icons.arrow_forward, on_orient=self._tap))
+        # Row 2: empty | Down | empty
+        grid.add_widget(Widget(size_hint=(None, None), size=(key, key)))
+        grid.add_widget(ArrowKey("down", Icons.arrow_downward, on_orient=self._tap))
+        grid.add_widget(Widget(size_hint=(None, None), size=(key, key)))
 
-        self.add_widget(self._arrow("up", Icons.arrow_upward))
-        self.add_widget(mid)
-        self.add_widget(self._arrow("down", Icons.arrow_downward))
+        # Center the grid horizontally
+        holder = AnchorLayout(
+            anchor_x="center",
+            anchor_y="center",
+            size_hint_y=None,
+            height=key * 3 + gap * 2,
+        )
+        holder.add_widget(grid)
+        self.add_widget(holder)
 
         cant = PrimaryButton(text="I can't see it")
         cant.bg_color = (0.85, 0.85, 0.85, 1)
@@ -142,19 +228,6 @@ class ArrowPad(BoxLayout):
         cant.height = dp(48)
         cant.on_press_cb = lambda *_: self._tap_cant()
         self.add_widget(cant)
-
-    def _arrow(self, orient: str, icon_name: str):
-        from colorsight.widgets import Icon
-
-        btn = PrimaryButton(text="")
-        btn.height = dp(56)
-        btn.bg_color = Colors.surface
-        btn.clear_widgets()
-        # icon_size is the glyph size in dp — never pass Kivy widget ``size=`` a float
-        ic = Icon(icon=icon_name, icon_size=28, color=Colors.text)
-        btn.add_widget(ic)
-        btn.on_press_cb = lambda *_ , o=orient: self._tap(o)
-        return btn
 
     def _tap(self, orient: str):
         if callable(self._on_orient):
@@ -165,74 +238,165 @@ class ArrowPad(BoxLayout):
             self._on_cant_see()
 
 
-class AxisBars(Widget):
-    """Pastel per-axis threshold bars (protan / deutan / tritan)."""
+class AxisBars(BoxLayout):
+    """Labeled pastel axis bars with ×cutoff value and a 1.0× normal-limit tick."""
 
     def __init__(self, thresholds: dict | None = None, cutoffs: dict | None = None, **kwargs):
         super().__init__(**kwargs)
+        self.orientation = "vertical"
+        self.spacing = dp(10)
         self.size_hint_y = None
-        self.height = dp(90)
         self._thr = thresholds or {"protan": 0.0, "deutan": 0.0, "tritan": 0.0}
         self._cut = cutoffs or {"protan": 0.01, "deutan": 0.01, "tritan": 0.015}
-        self.bind(pos=self._draw, size=self._draw)
+        self._rows: dict[str, dict] = {}
+        self._colors = {
+            "protan": (1.0, 0.72, 0.78, 1),
+            "deutan": (0.78, 0.94, 0.84, 1),
+            "tritan": (0.72, 0.88, 1.0, 1),
+        }
+        self._titles = {"protan": "Protan", "deutan": "Deutan", "tritan": "Tritan"}
+        for name in ("protan", "deutan", "tritan"):
+            self.add_widget(self._make_row(name))
+        self.height = dp(3 * 44 + 2 * 10)
+        self.bind(width=self._redraw_bars)
+
+    def _make_row(self, name: str) -> BoxLayout:
+        row = BoxLayout(orientation="vertical", size_hint_y=None, height=dp(44), spacing=dp(4))
+        head = BoxLayout(orientation="horizontal", size_hint_y=None, height=dp(18))
+        # Colored dot
+        dot = Widget(size_hint=(None, None), size=(dp(10), dp(10)))
+        rgba = self._colors[name]
+
+        def _draw_dot(*_a, w=dot, c=rgba):
+            w.canvas.clear()
+            with w.canvas:
+                Color(*c)
+                Ellipse(pos=w.pos, size=w.size)
+
+        dot.bind(pos=_draw_dot, size=_draw_dot)
+        head.add_widget(dot)
+        head.add_widget(Widget(size_hint_x=None, width=dp(8)))
+        title = Label(
+            text=self._titles[name],
+            font_name=Fonts.semibold,
+            font_size=dp(13),
+            color=Colors.text,
+            halign="left",
+            valign="middle",
+            size_hint_x=1,
+        )
+        title.bind(size=lambda *_ , L=title: setattr(L, "text_size", L.size))
+        head.add_widget(title)
+        val = Label(
+            text="0.0×",
+            font_name=Fonts.medium,
+            font_size=dp(13),
+            color=Colors.text_muted,
+            halign="right",
+            valign="middle",
+            size_hint_x=None,
+            width=dp(56),
+        )
+        val.bind(size=lambda *_ , L=val: setattr(L, "text_size", L.size))
+        head.add_widget(val)
+        row.add_widget(head)
+
+        bar = Widget(size_hint_y=None, height=dp(14))
+        row.add_widget(bar)
+        self._rows[name] = {"val": val, "bar": bar}
+        return row
 
     def set_values(self, thresholds: dict, cutoffs: dict | None = None):
         self._thr = dict(thresholds)
         if cutoffs:
             self._cut = dict(cutoffs)
-        self._draw()
+        self._redraw_bars()
 
-    def _draw(self, *_a):
-        self.canvas.clear()
-        if self.width < 4:
-            return
-        colors = {
-            "protan": (1.0, 0.72, 0.78, 1),   # pink
-            "deutan": (0.78, 0.94, 0.84, 1),  # mint
-            "tritan": (0.72, 0.88, 1.0, 1),   # sky
-        }
-        labels = ("protan", "deutan", "tritan")
-        row_h = self.height / 3.0
-        max_v = max(0.08, max(self._thr.values()), max(self._cut.values()) * 2)
-        with self.canvas:
-            for i, name in enumerate(labels):
-                y = self.y + self.height - (i + 1) * row_h + dp(4)
-                h = row_h - dp(8)
+    def _redraw_bars(self, *_a):
+        # Scale so 1.0× cutoff sits at a readable position; extend to max observed
+        multiples = []
+        for name in ("protan", "deutan", "tritan"):
+            cut = max(1e-9, float(self._cut[name]))
+            multiples.append(float(self._thr[name]) / cut)
+        max_mult = max(2.0, max(multiples) if multiples else 2.0)
+
+        for name in ("protan", "deutan", "tritan"):
+            cut = max(1e-9, float(self._cut[name]))
+            mult = float(self._thr[name]) / cut
+            self._rows[name]["val"].text = f"{mult:.1f}×"
+            bar = self._rows[name]["bar"]
+            bar.canvas.clear()
+            if bar.width < 4:
+                continue
+            radii = clamped_radii(dp(7), bar.width, bar.height)
+            frac = float(np.clip(mult / max_mult, 0.0, 1.0))
+            tick_x = bar.x + bar.width * (1.0 / max_mult)
+            with bar.canvas:
                 Color(0.90, 0.88, 0.86, 1)
-                radii = clamped_radii(dp(8), self.width, h)
-                RoundedRectangle(pos=(self.x, y), size=(self.width, h), radius=radii)
-                frac = float(np.clip(self._thr[name] / max_v, 0.0, 1.0))
-                Color(*colors[name])
+                RoundedRectangle(pos=bar.pos, size=bar.size, radius=radii)
+                Color(*self._colors[name])
                 RoundedRectangle(
-                    pos=(self.x, y),
-                    size=(max(h, self.width * frac), h),
+                    pos=bar.pos,
+                    size=(max(bar.height, bar.width * frac), bar.height),
                     radius=radii,
+                )
+                # Normal-limit tick at 1.0×
+                Color(0.35, 0.35, 0.35, 0.85)
+                Line(
+                    points=[tick_x, bar.y, tick_x, bar.y + bar.height],
+                    width=1.2,
                 )
 
 
-class SeverityBar(Widget):
-    """0–100 severity capsule."""
+class SeverityBar(BoxLayout):
+    """0–100 severity capsule with numeric label (e.g. “91 / 100”)."""
 
     def __init__(self, value: float = 0.0, **kwargs):
         super().__init__(**kwargs)
+        self.orientation = "vertical"
+        self.spacing = dp(6)
         self.size_hint_y = None
-        self.height = dp(14)
+        self.height = dp(40)
         self._value = float(np.clip(value, 0.0, 1.0))
-        self.bind(pos=self._draw, size=self._draw)
+
+        head = BoxLayout(orientation="horizontal", size_hint_y=None, height=dp(18))
+        head.add_widget(Widget())
+        self._lbl = Label(
+            text=self._fmt(),
+            font_name=Fonts.semibold,
+            font_size=dp(13),
+            color=Colors.text_muted,
+            halign="right",
+            valign="middle",
+            size_hint_x=None,
+            width=dp(72),
+        )
+        self._lbl.bind(size=lambda *_: setattr(self._lbl, "text_size", self._lbl.size))
+        head.add_widget(self._lbl)
+        self.add_widget(head)
+
+        self._bar = Widget(size_hint_y=None, height=dp(14))
+        self._bar.bind(pos=self._draw_bar, size=self._draw_bar)
+        self.add_widget(self._bar)
+        self._draw_bar()
+
+    def _fmt(self) -> str:
+        return f"{int(round(self._value * 100))} / 100"
 
     def set_value(self, value: float):
         self._value = float(np.clip(value, 0.0, 1.0))
-        self._draw()
+        self._lbl.text = self._fmt()
+        self._draw_bar()
 
-    def _draw(self, *_a):
-        self.canvas.clear()
-        radii = clamped_radii(dp(999), self.width, self.height)
-        with self.canvas:
+    def _draw_bar(self, *_a):
+        self._bar.canvas.clear()
+        radii = clamped_radii(dp(999), self._bar.width, self._bar.height)
+        with self._bar.canvas:
             Color(0.90, 0.88, 0.86, 1)
-            RoundedRectangle(pos=self.pos, size=self.size, radius=radii)
+            RoundedRectangle(pos=self._bar.pos, size=self._bar.size, radius=radii)
             Color(*Colors.accent_blue)
-            w = max(self.height, self.width * self._value)
-            RoundedRectangle(pos=self.pos, size=(w, self.height), radius=radii)
+            w = max(self._bar.height, self._bar.width * self._value)
+            RoundedRectangle(pos=self._bar.pos, size=(w, self._bar.height), radius=radii)
 
 
 class HueTile(ButtonBehavior, Widget):
@@ -295,7 +459,6 @@ class HueStrip(BoxLayout):
     def shuffle(self, rng=None):
         rng = rng or np.random.default_rng()
         self._order = list(rng.permutation(len(self._colors)))
-        # Avoid starting already sorted
         if self._order == list(range(len(self._colors))):
             self._order = list(reversed(self._order))
         self._selected = None

@@ -33,9 +33,10 @@ class PastelCard(ButtonBehavior, RoundedCard):
     subtitle = StringProperty("")
     palette = StringProperty("yellow")
     show_dot = BooleanProperty(True)
+    auto_height = BooleanProperty(False)
     on_select = ObjectProperty(None, allownone=True)
 
-    def __init__(self, title="", subtitle="", palette="yellow", **kwargs):
+    def __init__(self, title="", subtitle="", palette="yellow", auto_height=False, **kwargs):
         fill, accent = PASTEL_PALETTE.get(palette, PASTEL_PALETTE["yellow"])
         kwargs.setdefault("card_color", fill)
         kwargs.setdefault("radius", Radii.card)
@@ -45,6 +46,7 @@ class PastelCard(ButtonBehavior, RoundedCard):
         self.title = title
         self.subtitle = subtitle
         self.palette = palette
+        self.auto_height = auto_height
         self._accent = accent
 
         header = BoxLayout(
@@ -84,16 +86,48 @@ class PastelCard(ButtonBehavior, RoundedCard):
             height=dp(36) if subtitle else 0,
             opacity=1 if subtitle else 0,
         )
-        self._sub_lbl.bind(size=lambda *_: setattr(self._sub_lbl, "text_size", self._sub_lbl.size))
+        # Wrap to width; height follows texture (no clipping)
+        self._sub_lbl.bind(
+            width=self._reflow_subtitle,
+            texture_size=self._reflow_subtitle,
+        )
         self.add_widget(self._sub_lbl)
 
-        self.bind(title=self._sync_text, subtitle=self._sync_text, palette=self._sync_palette)
+        self.bind(
+            title=self._sync_text,
+            subtitle=self._sync_text,
+            palette=self._sync_palette,
+            width=self._reflow_subtitle,
+            auto_height=self._reflow_subtitle,
+        )
+        self._reflow_subtitle()
+
+    def _reflow_subtitle(self, *_args):
+        pad_x = (self.padding[0] + self.padding[2]) if self.padding else 0
+        wrap_w = max(1, self.width - pad_x) if self.width > pad_x else max(1, self._sub_lbl.width)
+        self._sub_lbl.text_size = (wrap_w, None)
+        self._sub_lbl.texture_update()
+        if self.subtitle:
+            self._sub_lbl.height = max(dp(20), self._sub_lbl.texture_size[1] + dp(2))
+            self._sub_lbl.opacity = 1
+        else:
+            self._sub_lbl.height = 0
+            self._sub_lbl.opacity = 0
+        if self.auto_height and self.size_hint_y is None:
+            pad_y = (self.padding[1] + self.padding[3]) if self.padding else 0
+            gaps = self.spacing * 2  # header–title, title–subtitle
+            self.height = (
+                pad_y
+                + dp(18)
+                + dp(28)
+                + self._sub_lbl.height
+                + gaps
+            )
 
     def _sync_text(self, *_args):
         self._title_lbl.text = self.title
         self._sub_lbl.text = self.subtitle
-        self._sub_lbl.height = dp(36) if self.subtitle else 0
-        self._sub_lbl.opacity = 1 if self.subtitle else 0
+        self._reflow_subtitle()
 
     def _sync_palette(self, *_args):
         fill, accent = PASTEL_PALETTE.get(self.palette, PASTEL_PALETTE["yellow"])

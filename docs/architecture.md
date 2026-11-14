@@ -89,8 +89,9 @@ Naming: Lab nearest swatch + HSV neutrals.
 
 ## UI notes
 
-- Test flow: **checklist → Trivector trials (arrows + can't see, 6 s timeout) → hue arrange → results**.
-- Results: type, severity label + 0–100 bar, per-axis pastel bars, before/after swatches, disclaimer, Save (friendly copy only).
+- Test flow: **checklist → Trivector trials (D-pad + can't see, 6 s timeout) → hue arrange → results**.
+- Trial UI: persistent shell; stimulus at **512 px** via `next_trial(size=…)` (no core edits), **linear** texture filter; label “Question N” (axis name hidden).
+- Results: type; severity “N / 100”; axis rows (label + ×cutoff + 1.0× tick); `PastelCard(auto_height=True)` disclaimer; before/after; Save (friendly copy only).
 - `FloatingNavBar`: five identical slots; blue `+` FAB clamped inside pill.
 - Never name custom widgets after built-in Kivy widgets (`PillProgressBar`, `ArrowPad`, …).
 - `Icon` glyph sizing uses **`icon_size`** (not Kivy `size=` float) — see `design.md`.

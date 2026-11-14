@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 
 import numpy as np
 from kivy.app import App
@@ -37,8 +38,9 @@ from colorsight.screens.test_widgets import (
 log = logging.getLogger("colorsight")
 
 TRIAL_TIMEOUT_S = 6.0
-STIM_SIZE = 256
-DISPLAY_DP = 190  # ~30 mm Landolt C at phone DPI
+# ~3× display resolution; linear-filtered downscale looks crisp (UI-only size param)
+STIM_SIZE = 512
+DISPLAY_DP = 170  # fits 360×640 with D-pad; ~30 mm on phone DPI
 
 
 class TestScreen(Screen):
@@ -50,9 +52,18 @@ class TestScreen(Screen):
         self._result = None
         self._hue_strip = None
         self._stim_image = None
+        self._stim_tex = None
         self._progress = None
+        self._q_label = None
+        self._prompt = None
+        self._pad = None
+        self._trial_scroll = None
+        self._trial_shell_ready = False
+        self._question_n = 0
         self._timeout_ev = None
         self._mode = "phone"
+        self._trial_update_ms: list[float] = []
+        self._trial_blit_ms: list[float] = []
         self._body = BoxLayout(orientation="vertical")
         self.add_widget(self._body)
         self.bind(on_pre_enter=self._on_enter)
@@ -65,6 +76,8 @@ class TestScreen(Screen):
     def _clear(self):
         self._cancel_timeout()
         self._body.clear_widgets()
+        # Detach trial shell from tree but keep widgets for reuse
+        self._trial_shell_ready = False
 
     def _cancel_timeout(self):
         if self._timeout_ev is not None:
@@ -97,7 +110,7 @@ class TestScreen(Screen):
         if self.manager:
             self.manager.current = "home"
 
-    def _padded_scroll(self, *children):
+    def _padded_scroll(self, *children, spacing=None):
         scroll = ScrollView(do_scroll_x=False, bar_width=0)
         content = BoxLayout(
             orientation="vertical",
@@ -107,7 +120,7 @@ class TestScreen(Screen):
                 dp(Spacing.screen_x),
                 dp(Spacing.nav_clearance),
             ],
-            spacing=dp(Spacing.md),
+            spacing=dp(spacing if spacing is not None else Spacing.md),
             size_hint_y=None,
         )
         content.bind(minimum_height=content.setter("height"))
@@ -129,7 +142,7 @@ class TestScreen(Screen):
             ),
             palette="yellow",
             size_hint_y=None,
-            height=dp(180),
+            auto_height=True,
             interactive=False,
         )
         about = PastelCard(
@@ -141,7 +154,7 @@ class TestScreen(Screen):
             ),
             palette="mint",
             size_hint_y=None,
-            height=dp(160),
+            auto_height=True,
             interactive=False,
         )
         start = PrimaryButton(text="Start test")
@@ -170,27 +183,17 @@ class TestScreen(Screen):
     def _begin_trivector(self):
         self._session = TrivectorSession(mode=self._mode, seed=42)
         self._result = None
+        self._question_n = 0
+        self._trial_update_ms = []
+        self._trial_blit_ms = []
+        self._build_trial_shell()
         self._show_trial()
 
-    # ── Trivector trials ───────────────────────────────────────────────
-    def _show_trial(self):
-        self._phase = "trivector"
-        self._clear()
-        assert self._session is not None
-        if self._session.finished:
-            self._show_hue()
-            return
-
-        trial = self._session.next_trial(size=STIM_SIZE)
-        if trial is None:
-            self._show_hue()
-            return
-        self._trial = trial
-
-        progress = PillProgressBar(progress=self._session.progress)
-        self._progress = progress
-        step = Label(
-            text=f"Trial  ·  {trial.axis} axis",
+    def _build_trial_shell(self):
+        """Build trial widgets once; subsequent trials only update texture/labels."""
+        self._body.clear_widgets()
+        self._q_label = Label(
+            text="Question 1",
             font_name=Fonts.semibold,
             font_size=dp(14),
             color=Colors.text_muted,
@@ -198,35 +201,76 @@ class TestScreen(Screen):
             height=dp(22),
             halign="left",
         )
-        step.bind(size=lambda *_: setattr(step, "text_size", step.size))
+        self._q_label.bind(size=lambda *_: setattr(self._q_label, "text_size", self._q_label.size))
 
-        stim_img = Image(size_hint_y=None, height=dp(DISPLAY_DP), fit_mode="contain")
-        stim_img.texture = numpy_to_texture(trial.stimulus.image)
-        self._stim_image = stim_img
+        self._progress = PillProgressBar(progress=0.0)
 
-        prompt = Label(
+        self._stim_image = Image(
+            size_hint_y=None,
+            height=dp(DISPLAY_DP),
+            fit_mode="contain",
+        )
+
+        self._prompt = Label(
             text="Which way does the gap open?",
             font_name=Fonts.bold,
-            font_size=dp(18),
+            font_size=dp(17),
             color=Colors.text,
             size_hint_y=None,
-            height=dp(28),
+            height=dp(26),
             halign="left",
         )
-        prompt.bind(size=lambda *_: setattr(prompt, "text_size", prompt.size))
+        self._prompt.bind(size=lambda *_: setattr(self._prompt, "text_size", self._prompt.size))
 
-        pad = ArrowPad(on_orient=self._on_orient, on_cant_see=self._on_cant_see)
+        # Spacing between prompt and pad
+        prompt_gap = Widget(size_hint_y=None, height=dp(12))
 
-        self._body.add_widget(
-            self._padded_scroll(
-                self._header("Vision Test"),
-                step,
-                progress,
-                stim_img,
-                prompt,
-                pad,
-            )
+        self._pad = ArrowPad(on_orient=self._on_orient, on_cant_see=self._on_cant_see)
+
+        self._trial_scroll = self._padded_scroll(
+            self._header("Vision Test"),
+            self._q_label,
+            self._progress,
+            self._stim_image,
+            self._prompt,
+            prompt_gap,
+            self._pad,
+            spacing=Spacing.sm,
         )
+        self._body.add_widget(self._trial_scroll)
+        self._trial_shell_ready = True
+
+    # ── Trivector trials ───────────────────────────────────────────────
+    def _show_trial(self):
+        self._phase = "trivector"
+        self._cancel_timeout()
+        assert self._session is not None
+        if self._session.finished:
+            self._show_hue()
+            return
+
+        t0 = time.perf_counter()
+        trial = self._session.next_trial(size=STIM_SIZE)
+        t_gen = time.perf_counter()
+        if trial is None:
+            self._show_hue()
+            return
+        self._trial = trial
+        self._question_n += 1
+
+        if not self._trial_shell_ready:
+            self._build_trial_shell()
+
+        self._q_label.text = f"Question {self._question_n}"
+        self._progress.set_progress(self._session.progress)
+        self._stim_tex = numpy_to_texture(trial.stimulus.image, existing=self._stim_tex)
+        self._stim_image.texture = self._stim_tex
+        self._stim_image.canvas.ask_update()
+        t1 = time.perf_counter()
+
+        self._trial_update_ms.append((t1 - t0) * 1000.0)
+        self._trial_blit_ms.append((t1 - t_gen) * 1000.0)
+
         self._timeout_ev = Clock.schedule_once(
             lambda dt: self._on_cant_see(), TRIAL_TIMEOUT_S
         )
@@ -251,13 +295,25 @@ class TestScreen(Screen):
     def _show_hue(self):
         self._phase = "hue"
         self._clear()
+        if self._trial_update_ms:
+            avg = sum(self._trial_update_ms) / len(self._trial_update_ms)
+            blit = self._trial_blit_ms
+            blit_avg = sum(blit) / len(blit) if blit else 0.0
+            log.info(
+                "trial_timing n=%d total_avg_ms=%.1f blit_avg_ms=%.1f "
+                "(persistent shell; stim %dpx)",
+                len(self._trial_update_ms),
+                avg,
+                blit_avg,
+                STIM_SIZE,
+            )
         colors = hue_tile_colors(7)
         intro = PastelCard(
             title="Hue arrangement",
             subtitle="Tap two tiles to swap them. Arrange colors from red → violet (rainbow order).",
             palette="lavender",
             size_hint_y=None,
-            height=dp(130),
+            auto_height=True,
             interactive=False,
         )
         self._hue_strip = HueStrip(colors)
@@ -309,7 +365,7 @@ class TestScreen(Screen):
             subtitle=sub,
             palette=palette,
             size_hint_y=None,
-            height=dp(120),
+            auto_height=True,
             interactive=False,
         )
 
@@ -326,7 +382,7 @@ class TestScreen(Screen):
         sev_bar = SeverityBar(value=r.severity)
 
         axis_title = Label(
-            text="Axis thresholds (protan / deutan / tritan)",
+            text="Axis thresholds",
             font_name=Fonts.semibold,
             font_size=dp(14),
             color=Colors.text_muted,
@@ -346,7 +402,7 @@ class TestScreen(Screen):
             ),
             palette="yellow",
             size_hint_y=None,
-            height=dp(150),
+            auto_height=True,
             interactive=False,
         )
 
@@ -417,7 +473,7 @@ class TestScreen(Screen):
         return demo
 
     def _demo_pair(self, result) -> BoxLayout:
-        row = BoxLayout(orientation="vertical", spacing=dp(8), size_hint_y=None, height=dp(180))
+        row = BoxLayout(orientation="vertical", spacing=dp(10), size_hint_y=None, height=dp(190))
 
         def _attach(title: str, kind: str):
             lbl = Label(
