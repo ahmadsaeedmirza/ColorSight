@@ -27,10 +27,12 @@ Requires NumPy + OpenCV (`opencv-python` or `opencv-python-headless`).
 
 ### Vision Test notes (desktop)
 
-- First **Start test** generates 14 procedural plates (~1–3 s on a laptop); UI shows “Preparing plates…”.
-- Saved profile path: Kivy `user_data_dir` / `correction_profile.json` (see `colorsight.storage.profile_path`).
+- First **Start test** generates 14 procedural plates (~1–3 s); UI shows “Preparing plates…”.
+- Saved profile path (logs/docs only): Kivy `user_data_dir` / `correction_profile.json` — UI shows a friendly confirmation, not the path.
 - Plate artwork is original/procedural — do not replace with copyrighted Ishihara scans.
-- Progress UI widget is `PillProgressBar` (not Kivy’s `ProgressBar`) — renaming avoids `style.kv` / missing-`max` crashes.
+- Progress UI widget is `PillProgressBar` (not Kivy’s `ProgressBar`).
+- Plate quality gates: `python -m unittest tests.test_plate_validation -v`
+- Preview PNGs: `python tools/preview_plates.py` → `debug/plates/` (gitignored).
 
 ## Android packaging (Buildozer)
 

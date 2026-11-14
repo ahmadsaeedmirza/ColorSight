@@ -143,7 +143,13 @@ Apply the **same** clamped value to fill **and** matching shadow layers. Used by
 - Pastel intro cards (yellow / mint) with screening disclaimer  
 - One plate image per step + Lexend prompts + dark/light numpad keys  
 - Progress capsule under “Plate N of 14”  
-- Results: peach/mint result card, yellow medical disclaimer card, before/after demo strip, blue **Save my profile** CTA
+- Results: peach/mint/lavender result card, yellow medical disclaimer card, before/after demo strip (bands fill row width with no black edge), blue **Save my profile** CTA  
+- After save: show **“Your color profile has been saved”** (never show file paths in the UI)
+
+### Floating nav
+
+- Five **identical** slots: Material icon above label, shared baseline (including Camera)  
+- Blue center **+** FAB sits on the Camera slot, raised slightly but **fully inside** the nav pill; horizontally clamped so it cannot spill outside the bar at narrow (~360) or wide widths
 
 ## Layout recipes
 

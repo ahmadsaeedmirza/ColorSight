@@ -26,7 +26,8 @@ This is not optional. Documentation is part of the deliverable, not an afterthou
 - Keep feature logic out of screen layout files when possible (separate modules under `colorsight/`).
 - **Color math belongs in `/core`** (NumPy/OpenCV, no Kivy). UI screens import `core` — do not duplicate Machado/daltonize/naming/plates/scoring in widgets.
 - **Ishihara-style plates must be procedural/original** — never ship or scrape copyrighted Ishihara plate images.
-- **Vision Test results** must keep a clear screening disclaimer (not a medical diagnosis; display variation).
+- **Plate quality:** keep `tests/test_plate_validation.py` green (ΔE / ΔL* / figure count / stroke / IoU). Regenerate or tune palettes when gates fail; use `tools/preview_plates.py` to inspect.
+- **Vision Test results** must keep a clear screening disclaimer (not a medical diagnosis; display variation). After save, show friendly copy only — never surface filesystem paths in the UI.
 - Desktop-first during development: `python main.py` must keep working; `python -m unittest discover -s tests` must stay green when touching `/core`.
 - Do not implement Phase 2 (system-wide color filter / Shizuku) until Phase 1 is complete and explicitly requested.
 - **Never name custom widgets after built-in Kivy widgets** (`ProgressBar`, `Button`, `Label`, `Slider`, `Image`, `Switch`, …). Kivy binds `style.kv` by class name and will crash or mis-style collisions. Use prefixed names (e.g. `PillProgressBar`).

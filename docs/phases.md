@@ -16,6 +16,8 @@
 | Unit tests for engine | Done |
 | **Vision Test UI** — procedural plates, numpad, hue arrange, scoring, results, save profile | Done |
 | Test crash fix — `PillProgressBar` rename (no Kivy builtin name collision) | Done |
+| Plate generator audit — dense packing, bold Lexend masks, confusion palettes, validation tests, preview tool, inconclusive scoring | Done |
+| UI polish — result swatches, friendly save copy, nav slots + centered FAB | Done |
 
 ### Remaining in-app features
 

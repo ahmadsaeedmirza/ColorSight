@@ -4,100 +4,93 @@
 
 | Choice | Role | Why |
 |--------|------|-----|
-| **Python 3** | App language | Course/project fit; strong NumPy/OpenCV ecosystem for color vision work |
-| **Kivy** | UI framework | Cross-platform (desktop + Android via Buildozer); flexible canvas for custom pastel UI |
-| **KivyMD** | *Not used* | Material defaults fight the pastel notes look |
-| **Material Icons TTF** | UI icons | Ligature font; Lexend has no icon glyphs |
-| **NumPy** | Array math | Vectorized CVD transforms + plate buffers |
-| **OpenCV** | Color spaces / drawing | Lab/HSV naming; digit masks + circle packing for plates |
-| **Buildozer** | Android packaging | Kivy → APK path |
+| **Python 3** | App language | Course/project fit; NumPy/OpenCV ecosystem |
+| **Kivy** | UI | Desktop + Android via Buildozer; custom pastel UI |
+| **NumPy / OpenCV / Pillow** | Color + plates | Vectorized CVD math; Lab/HSV; Lexend digit masks |
+| **Buildozer** | Android packaging | Kivy → APK |
 
 ## Folder structure
 
 ```
 ColorSight/
-├── core/                   # Pure-Python color engine (no UI)
+├── core/
+│   ├── plates.py      # Procedural plates + metadata + metrics
+│   ├── scoring.py     # expected-answer classification (+ inconclusive)
 │   ├── machado.py / engine.py / profile.py / naming.py
-│   ├── plates.py           # Procedural Ishihara-style plates (original)
-│   └── scoring.py          # Screening classification + severity
-├── tests/
-├── colorsight/
-│   ├── storage.py          # user_data_dir profile path
-│   ├── screens/
-│   │   ├── test_screen.py  # Vision test flow (intro→plates→hue→results)
-│   │   └── test_widgets.py # PillProgressBar, Numpad, HueStrip
-│   └── …
-└── docs/
+├── tests/             # Engine + plate validation + respondent sims
+├── tools/preview_plates.py  # Writes debug/plates/*.png
+├── debug/             # gitignored preview output
+└── colorsight/        # Kivy UI (test_screen, FloatingNavBar, …)
 ```
 
-## Modules
+## Vision-test plates (`core/plates.py`)
 
-### Color engine (`core`)
+**Original procedural artwork** — not copyrighted Ishihara images.
 
-| Module | Responsibility |
-|--------|----------------|
-| `plates` | Procedural plates (circle packing + digit mask); `DEFAULT_BATTERY` (14); hue tile colors |
-| `scoring` | `score_screening` → normal / protan / deutan / tritan + severity; `TestResult.to_profile()` |
-| `engine` / `machado` / `profile` / `naming` | Simulation, daltonization, JSON profile, `name_color` |
+Pipeline per plate:
 
-**Copyright:** Plates are generated procedurally. We do **not** ship or copy patented/copyrighted Ishihara plate images.
+1. **Bold digit mask** — Lexend-Bold at ~60% of plate diameter, dilated so strokes are ≥3–4 average-dot widths.
+2. **Dense hex packing** — varied radii, jitter, extra fill so the disk looks filled.
+3. **Figure vs ground** — each dot is figure if its center lies in the mask (≥40 figure dots).
+4. **Confusion-line palettes** — equiluminant figure/ground bases (ΔL* < 3) with high normal ΔE; under the matching Machado simulation @ severity 1.0, ΔE ≤ 6 on hidden/classify/tritan plates. Small a*/b* jitter only (no brightness cue).
 
-### UI — Vision Test (`colorsight.screens.test_screen`)
+### Battery metadata (`DEFAULT_BATTERY`, 14 plates)
 
-Flow inside screen id `test`:
+| Role | Count | Expected answers |
+|------|-------|------------------|
+| Control | 1 | Everyone sees the digit |
+| Hidden RG | 6 | Normal (+ tritan) see digit; protan & deutan → can't see |
+| Classify protan | 2 | Normal/deutan/tritan see; protan → can't see |
+| Classify deutan | 3 | Normal/protan/tritan see; deutan → can't see |
+| Tritan | 2 | Normal/protan/deutan see; tritan → can't see |
 
-1. **Intro** — pastel cards + disclaimer + Start  
-2. **Plates (14)** — one plate/screen, progress bar, large numpad, “Can't see anything”  
-3. **Hue arrangement** — tap-to-swap colored tiles into rainbow order (severity cue)  
-4. **Results** — type + severity, before/after simulation strip, Save profile, medical disclaimer  
+Each `PlateSpec` stores `expected_normal / expected_protan / expected_deutan / expected_tritan` (`None` = "can't see").
 
-Profile save: `CorrectionProfile` → `App.user_data_dir/correction_profile.json` via `colorsight.storage.profile_path()`.
+`RenderedPlate` carries `image`, `mask`, and `dots` for validation and UI.
 
-## Data flow
+### Automated plate gates (`tests/test_plate_validation.py`)
 
-```
-Test UI answers + hue order
-        ↓
-score_screening() → TestResult (classification, severity)
-        ↓
-TestResult.to_profile() → CorrectionProfile
-        ↓
-profile.save(JSON)  +  apply_simulation for result demo
-```
+For **every** plate (fail loudly with plate id):
 
-## Color math (brief)
+| Gate | Threshold |
+|------|-----------|
+| Figure dot count | ≥ 40 |
+| Stroke width | ≥ 3 average-dot diameters |
+| Normal mean Lab ΔE (figure vs ground) | ≥ 20 |
+| Matching CVD ΔE @ severity 1.0 (hidden/classify/tritan) | ≤ 6 |
+| Mean ΔL* | < 3 |
+| IoU (rasterized figure dots vs digit mask) | ≥ 0.7 |
 
-### Simulation — Machado et al. 2009
+Preview: `python tools/preview_plates.py` → `debug/plates/` (gitignored).
 
-\[
-\mathbf{rgb}_{sim} = S(\textit{type},\, s)\, \mathbf{rgb}
-\]
+## Scoring (`core/scoring.py`)
 
-Severity \(s \in [0,1]\); tables step 0.1 with linear interpolation.
+Match each response against the per-viewer expected table (`None` ↔ "can't see").
 
-### Daltonization
+**Thresholds:**
 
-\[
-C = I + E(I - S),\quad \mathbf{rgb}_{out} = C\,\mathbf{rgb}\ \text{(clipped)}
-\]
+| Constant | Value | Meaning |
+|----------|-------|---------|
+| `MATCH_RATE_CLEAR` | 0.75 | Winning type must match ≥ this fraction |
+| `LEAD_MARGIN` | 0.12 | Must beat #2 by this margin |
+| `NORMAL_MIN_MATCH` | 0.85 | Normal needs a high match rate |
+| `CONTROL_FAIL_INCONCLUSIVE` | 0.5 | Failing control → often inconclusive |
 
-### Screening score (heuristic)
+Outcomes: `normal` | `protanopia` | `deuteranopia` | `tritanopia` | **`inconclusive`**.
 
-- Miss rates by plate axis (control / red–green / protan / deutan / blue–yellow)
-- Hue permutation error normalized to \([0,1]\)
-- Classification: normal vs protan vs deutan vs tritan; severity blends axis miss + hue error  
-- **Screening only** — not a clinical diagnosis; display gamut varies by device
+Severity blends miss-vs-normal rate with hue-arrangement error. Screening only — not a medical diagnosis.
 
-### Procedural plates
+Respondent unit tests: `simulate_respondent(type)` → `score_screening` asserts the matching class.
 
-1. Build a soft digit mask (OpenCV font + slight rotation)  
-2. Pack non-overlapping circles in a disk  
-3. Color circles from figure vs ground palettes chosen for the plate’s confusion axis  
+## Color math (CVD engine)
 
-## Design decisions
+Simulation: \(\mathbf{rgb}_{sim} = S(\textit{type}, s)\,\mathbf{rgb}\) (Machado 2009).  
+Daltonization: \(C = I + E(I - S)\).  
+Naming: Lab nearest swatch + HSV neutrals.
 
-1. `/core` stays UI-free; Test screen imports scoring/plates only.  
-2. Original procedural plates avoid Ishihara copyright.  
-3. Single digit answers keep the numpad simple on phones.  
-4. Hue step adds a severity signal beyond binary plate misses.  
-5. Explicit on-result disclaimer about screening limits and screen variation.
+## UI notes
+
+- Test flow: intro → 14 plates → hue arrange → results (disclaimer + save).
+- Save copy: “Your color profile has been saved” (path only in logs).
+- `FloatingNavBar`: five identical icon+label slots; blue `+` FAB centered on Camera, clamped inside the pill.
+- Never name custom widgets after built-in Kivy widgets (`PillProgressBar`, not `ProgressBar`).

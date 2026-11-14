@@ -158,7 +158,8 @@ class TestScreen(Screen):
         self._clear()
         self._answer_buf = ""
         total = len(self._battery)
-        spec, img = self._battery[self._index]
+        rendered = self._battery[self._index]
+        spec, img = rendered.spec, rendered.image
 
         progress = PillProgressBar(progress=(self._index) / total)
         self._progress = progress
@@ -276,7 +277,7 @@ class TestScreen(Screen):
         )
 
     def _finish(self):
-        specs = [s for s, _ in self._battery]
+        specs = [p.spec for p in self._battery]
         answers = make_answers(specs, self._responses)
         order = self._hue_strip.order if self._hue_strip else list(range(7))
         self._result = score_screening(answers, hue_order=order)
@@ -289,10 +290,19 @@ class TestScreen(Screen):
         r = self._result
 
         sev_pct = int(round(r.severity * 100))
+        if r.is_inconclusive:
+            palette = "lavender"
+            sub = f"Could not clearly classify  ·  Matched normal on {r.plate_correct}/{r.plate_total}"
+        elif r.is_normal:
+            palette = "mint"
+            sub = f"Estimated severity {sev_pct}%  ·  Plates {r.plate_correct}/{r.plate_total}"
+        else:
+            palette = "peach"
+            sub = f"Estimated severity {sev_pct}%  ·  Plates {r.plate_correct}/{r.plate_total}"
         result_card = PastelCard(
             title=r.label,
-            subtitle=f"Estimated severity {sev_pct}%  ·  Plates {r.plate_correct}/{r.plate_total}",
-            palette="peach" if not r.is_normal else "mint",
+            subtitle=sub,
+            palette=palette,
             size_hint_y=None,
             height=dp(120),
             interactive=False,
@@ -355,9 +365,10 @@ class TestScreen(Screen):
             )
         )
 
-    def _demo_pair(self, result) -> BoxLayout:
-        # Colorful strip for before/after
-        w, h = 320, 72
+    def _make_swatch_rgb(self, width: int, height: int = 72) -> np.ndarray:
+        """Full-width band swatch with no leftover black column."""
+        w = max(6, int(width))
+        h = int(height)
         demo = np.zeros((h, w, 3), dtype=np.uint8)
         bands = [
             (220, 40, 40),
@@ -367,17 +378,17 @@ class TestScreen(Screen):
             (180, 50, 180),
             (40, 180, 180),
         ]
-        bw = w // len(bands)
+        n = len(bands)
         for i, col in enumerate(bands):
-            demo[:, i * bw : (i + 1) * bw] = col
+            start = (i * w) // n
+            end = ((i + 1) * w) // n
+            demo[:, start:end] = col
+        return demo
 
-        if result.is_normal:
-            sim = demo.copy()
-        else:
-            sim = apply_simulation(demo, result.classification, result.severity)
-
+    def _demo_pair(self, result) -> BoxLayout:
         row = BoxLayout(orientation="vertical", spacing=dp(8), size_hint_y=None, height=dp(180))
-        for title, arr in (("Original", demo), ("As simulated for your result", sim)):
+
+        def _attach(title: str, kind: str):
             lbl = Label(
                 text=title,
                 font_name=Fonts.medium,
@@ -389,9 +400,25 @@ class TestScreen(Screen):
             )
             lbl.bind(size=lambda *_ , L=lbl: setattr(L, "text_size", L.size))
             img = Image(size_hint_y=None, height=dp(64), fit_mode="fill")
-            img.texture = numpy_to_texture(arr)
+
+            def _fill(*_a, image=img, which=kind):
+                w = max(64, int(image.width) if image.width > 1 else 320)
+                demo = self._make_swatch_rgb(w, 72)
+                if which == "sim" and not result.is_normal and not result.is_inconclusive:
+                    arr = apply_simulation(demo, result.classification, result.severity)
+                elif which == "sim" and result.is_inconclusive:
+                    arr = apply_simulation(demo, "deuteranopia", max(0.3, result.severity))
+                else:
+                    arr = demo
+                image.texture = numpy_to_texture(arr)
+
+            img.bind(size=_fill)
+            Clock.schedule_once(lambda dt: _fill(), 0)
             row.add_widget(lbl)
             row.add_widget(img)
+
+        _attach("Original", "orig")
+        _attach("As simulated for your result", "sim")
         return row
 
     def _save_profile(self, *_a):
@@ -403,5 +430,9 @@ class TestScreen(Screen):
         app = App.get_running_app()
         if app is not None:
             app.correction_profile = profile
-        self._save_status.text = f"Saved · {path.name}"
+        # Friendly copy only — path stays in logs/docs
+        import logging
+
+        logging.getLogger("colorsight").info("Correction profile saved to %s", path)
+        self._save_status.text = "Your color profile has been saved"
         self._save_status.color = Colors.accent_blue

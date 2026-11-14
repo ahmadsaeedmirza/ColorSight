@@ -4,6 +4,20 @@ Newest entries first. Append after every prompt per `rules.md`.
 
 ---
 
+## 2026-11-14 — Plate audit + validation + 3 UI fixes
+
+**Prompt:** Fix unreadable plates (dense packing, bold mask, confusion palettes, metadata, ΔE/IoU tests, preview tool, scoring with inconclusive); UI: swatch black edge, friendly save text, nav Camera/FAB.
+
+**Plates:** Rewrote `core/plates.py` — Lexend-Bold ~60% mask + heavy dilation, hex packing, equiluminant confusion fallbacks, `RenderedPlate` + `plate_metrics`. Battery roles: 1 control, 6 hidden RG, 2/3 classify, 2 tritan with expected_* table. Validation tests enforce ΔE/ΔL/figure count/stroke/IoU; `tools/preview_plates.py` → `debug/plates/` (gitignored).
+
+**Scoring:** Expected-answer match rates + thresholds → normal/protan/deutan/tritan/**inconclusive**; `simulate_respondent` unit tests.
+
+**UI:** Demo bands fill exact width; save message without path; `FloatingNavBar` five identical icon+label slots + FAB clamped inside pill.
+
+**Verified:** 31 unit tests OK; FLOW_OK normal + save copy; previews written.
+
+---
+
 ## 2026-11-14 — Fix ProgressBar / Kivy style.kv collision
 
 **Prompt:** Crash on Test plates — `BuilderException` / missing `max` because custom `ProgressBar` collided with Kivy’s built-in. Rename, audit collisions, run full flow, document naming rule.
