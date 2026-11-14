@@ -167,7 +167,7 @@ Apply the **same** clamped value to fill **and** matching shadow layers. Used by
 | `camera` | **Live correction** — full-bleed preview, modes, Strength, freeze/capture, loupe toggle |
 | `lens` | Redirect to Camera with loupe enabled |
 | `settings` | Debug FPS toggle + about |
-| `profile` | Placeholder (Phase 1 remaining) |
+| `profile` | Saved correction hero, swatches, fine-tune, clear |
 
 ### Photos screen recipe
 

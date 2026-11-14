@@ -4,6 +4,16 @@ Newest entries first. Append after every prompt per `rules.md`.
 
 ---
 
+## 2026-11-14 — Phase 1 final polish (Profile, Settings, build)
+
+**Prompt:** Profile + Settings; app-wide polish (first-run, Home, back); Android buildozer/icons/WSL/`build_android.sh`; final review + README. No core math / vision-test logic / scoring / existing test breakage.
+
+**Profile:** Hero card, SeverityBar, AxisBars when thresholds stored, swatch strip, fine-tune with confirm (only overwrite), reset to test severity, clear with confirm. Optional profile JSON metadata via UI save path.
+
+**Settings:** About / Privacy / Display tips / FPS toggle. **Welcome:** CTA → Test; mark onboarding done. **Home:** chips + avatar→Profile, menu→Settings, no search. **App:** first-run prefs, back key. **Build:** icon/splash/adaptive, `buildozer.spec` pins, `tools/build_android.sh`, WSL steps + device checklist honesty in production.md. **README.md** + Phase 1 marked complete; Phase 2 Shizuku listed only.
+
+---
+
 ## 2026-11-14 — Photos split-0 default + Camera/Lens
 
 **Prompt:** Photos filter-on-by-default (divider 0%), disk profile reload + strength tests; Camera + Lens shared live pipeline; loupe/`name_color`; freeze/capture; FPS toggle. No `/core` changes.

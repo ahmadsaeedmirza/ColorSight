@@ -7,6 +7,7 @@ from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.screenmanager import FadeTransition, ScreenManager
 from kivy.graphics import Color, Rectangle
 
+from colorsight.prefs import is_first_run
 from colorsight.theme import register_fonts
 from colorsight.theme.tokens import Colors, Spacing
 from colorsight.widgets import FloatingNavBar
@@ -24,6 +25,9 @@ from colorsight.screens import (
 # Phone-like default for desktop layout checks
 Window.size = (390, 844)
 Window.clearcolor = Colors.bg
+
+# Back stack for consistent navigation
+_BACK_HOME = {"test", "settings", "photos", "camera", "lens", "profile"}
 
 
 class RootShell(FloatLayout):
@@ -53,6 +57,9 @@ class RootShell(FloatLayout):
         self.sm.bind(current=self._on_screen)
         self.add_widget(self.sm)
 
+        # First run → Welcome; later launches → Home
+        self.sm.current = "welcome" if is_first_run() else "home"
+
         self.nav = FloatingNavBar()
         self.nav.on_navigate = self._navigate
         self.add_widget(self.nav)
@@ -60,22 +67,22 @@ class RootShell(FloatLayout):
         self._place_nav()
         self._on_screen(self.sm, self.sm.current)
 
+        Window.bind(on_keyboard=self._on_key)
+
     def _sync_bg(self, *_args):
         self._bg.pos = self.pos
         self._bg.size = self.size
 
     def _place_nav(self, *_args):
-        margin = dp(Spacing.nav_margin)  # 16–20dp side inset
+        margin = dp(Spacing.nav_margin)
         self.nav.width = max(0, self.width - margin * 2)
         self.nav.x = self.x + margin
         self.nav.y = self.y + margin
-        # Height owned by FloatingNavBar (pill + raised FAB)
 
     def _on_screen(self, _sm, name):
         show_nav = name in self.NAV_SCREENS and name != "welcome"
         self.nav.opacity = 1 if show_nav else 0
         self.nav.disabled = not show_nav
-        # Map feature screens onto closest nav key
         nav_key = {
             "home": "home",
             "photos": "photos",
@@ -96,6 +103,27 @@ class RootShell(FloatLayout):
     def set_nav_active(self, screen_name: str):
         if screen_name in self.sm.screen_names:
             self.sm.current = screen_name
+
+    def go_back(self) -> bool:
+        """Handle Android back / Escape. Returns True if consumed."""
+        cur = self.sm.current
+        if cur == "welcome":
+            return False
+        if cur in _BACK_HOME:
+            self.sm.transition.direction = "right"
+            self.sm.current = "home"
+            return True
+        if cur == "home":
+            return False
+        self.sm.transition.direction = "right"
+        self.sm.current = "home"
+        return True
+
+    def _on_key(self, _window, key, *_args):
+        # Android back = 27 (Escape) or 1001 on some devices
+        if key in (27, 1000, 1001):
+            return self.go_back()
+        return False
 
 
 class ColorSightApp(App):

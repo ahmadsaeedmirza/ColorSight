@@ -511,14 +511,21 @@ class TestScreen(Screen):
     def _save_profile(self, *_a):
         if self._result is None:
             return
+        from datetime import datetime
+
         from colorsight.storage import profile_path
 
         profile = self._result.to_profile()
+        # UI metadata only — does not change correction math
+        profile.measured_at = datetime.now().strftime("%Y-%m-%d")
+        profile.label = self._result.label
+        profile.thresholds = dict(self._result.thresholds)
+        profile.test_severity = float(self._result.severity)
         path = profile_path()
         profile.save(path)
         app = App.get_running_app()
         if app is not None:
             app.correction_profile = profile
-        log.info("Correction profile saved to %s", path)
+        log.info("correction_profile_saved")
         self._save_status.text = "Your color profile has been saved"
         self._save_status.color = Colors.accent_blue

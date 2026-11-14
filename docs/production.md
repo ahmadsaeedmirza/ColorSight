@@ -101,51 +101,105 @@ python main.py   # open Camera; Settings → Show camera FPS
 
 Known limits: first OpenCV open can lag; Android Camera4Kivy preview wiring may need a device pass to attach the Preview widget callback into `AndroidCameraSource.push_frame_rgb`. Heavy Simulation + loupe on low-end devices may dip below 15 fps — drop frames rather than queue.
 
-## Android packaging (Buildozer)
+## Android packaging (Buildozer) — WSL2 (Ubuntu) from Windows
 
-Buildozer is typically run on **Linux** (or WSL2 / a CI Linux image). Native Windows Buildozer is not recommended.
+Native Windows Buildozer is **not** recommended. Use **WSL2 + Ubuntu**.
 
-### One-time host setup (Linux / WSL)
+### 1. Install WSL2 (Windows PowerShell as Administrator)
+
+```powershell
+wsl --install -d Ubuntu
+# Reboot if prompted, then open Ubuntu from the Start menu
+```
+
+### 2. One-time Ubuntu packages
 
 ```bash
 sudo apt update
-sudo apt install -y git zip unzip openjdk-17-jdk python3-pip autoconf libtool
-sudo apt install -y libffi-dev libssl-dev
+sudo apt install -y git zip unzip openjdk-17-jdk python3-pip python3-venv \
+  autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev \
+  libtinfo5 cmake libffi-dev libssl-dev
 pip3 install --user buildozer cython
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+buildozer --version
 ```
 
-Ensure Android SDK/NDK are available (Buildozer can download them on first run).
+### 3. Get the project into WSL
 
-### Build debug APK
+**Option A — mount your Windows drive (simplest while developing on Windows):**
 
 ```bash
-cd /path/to/ColorSight
-buildozer android debug
+cd "/mnt/d/University/6th Semester/Digital Image Processing/Sem Project/ColorSight"
+# Adjust the path if your repo lives elsewhere under /mnt/c/... or /mnt/d/...
 ```
 
-APK output (typical):
-
-`bin/colorsight-*-debug.apk`
-
-### Install on a real device
-
-1. Enable **Developer options** → **USB debugging** on the phone.
-2. Connect via USB (or use wireless ADB).
-3. Install:
+**Option B — copy into the Linux home (often faster builds):**
 
 ```bash
-adb install -r bin/colorsight-*-debug.apk
+cp -a "/mnt/d/University/6th Semester/Digital Image Processing/Sem Project/ColorSight" ~/ColorSight
+cd ~/ColorSight
 ```
 
-4. Launch **ColorSight** from the app drawer.
+### 4. Build the debug APK
 
-### Release build (later)
+```bash
+chmod +x tools/build_android.sh
+./tools/build_android.sh
+# Equivalent: buildozer android debug && cp -f bin/colorsight-*-debug.apk dist/
+```
+
+First run downloads the Android SDK/NDK — expect **30–90+ minutes**. Later builds are much faster. Output APK:
+
+- `bin/colorsight-<version>-arm64-v8a_armeabi-v7a-debug.apk`
+- Copied to `dist/` by the script
+
+### 5. USB debugging + install with adb
+
+On the phone:
+
+1. **Settings → About phone** → tap **Build number** 7 times → Developer options.
+2. Enable **USB debugging** (and “Install via USB” if present).
+3. Connect USB; accept the RSA prompt on the phone.
+
+From **Windows** (with [platform-tools](https://developer.android.com/tools/releases/platform-tools) on PATH) or from WSL (if `adb` sees the device):
+
+```bash
+adb devices
+adb install -r dist/colorsight-*-debug.apk
+```
+
+Launch **ColorSight** from the app drawer.
+
+### 6. Release build (later)
 
 ```bash
 buildozer android release
 ```
 
-Sign with a proper keystore before Play Store distribution (not configured in Phase 0).
+Sign with a proper keystore before Play Store distribution (not configured yet).
+
+### FileProvider / packaging checklist
+
+| Item | Wired how |
+|------|-----------|
+| `file_paths.xml` | `android.add_resources` → `@xml/file_paths` |
+| Manifest `<provider>` | Merge `assets/android/fileprovider_snippet.xml` into the generated manifest if share fails (p4a may not auto-merge; verify on device) |
+| `core/*`, `colorsight/*`, `assets/**` | `source.include_patterns` |
+| Icon / splash | `assets/icon.png`, `presplash.png`, adaptive foreground/background |
+| Portrait + api 33 / min 24 / arm64+armeabi | `buildozer.spec` |
+
+### Troubleshooting (typical failures)
+
+| Symptom | What to try |
+|---------|-------------|
+| OpenCV recipe fails | Pin `opencv` in requirements; clean `.buildozer` and rebuild; ensure NDK 25b matches `android.ndk` |
+| NDK/SDK download stuck | Check disk space (~20+ GB); retry; set `ANDROIDSDK` / `ANDROIDNDK` if you already have them |
+| Cython / Kivy mismatch | Use `kivy==2.3.0` as in `buildozer.spec`; `pip3 install --user 'cython<3'` if needed for older recipes |
+| Camera4Kivy missing classes | Confirm `camera4kivy` in requirements; add/update gradle deps per Camera4Kivy docs; clean build |
+| Permission denied at runtime | CAMERA / READ_MEDIA_IMAGES declared; app requests CAMERA at runtime — use Settings → Open settings card if denied |
+| Share crashes | Ensure FileProvider authority `${applicationId}.fileprovider` and `@xml/file_paths` are in the final APK manifest |
+| `buildozer` not found | `pip3 install --user buildozer` and ensure `~/.local/bin` is on `PATH` |
 
 ## Permissions
 
@@ -187,34 +241,34 @@ Must ship with the APK:
 
 ## Testing checklist (device)
 
-- [ ] App installs and opens without crash
-- [ ] Welcome → Home navigation works
-- [ ] Floating bottom nav fits width (side margins), switches screens, FAB raised and tappable
-- [ ] Lexend fonts + Material Icons render (no empty boxes)
-- [ ] Selected chips show white text on dark pills
-- [ ] Home / placeholder content scrolls clear of the nav bar
-- [ ] Orientation / safe areas look acceptable on the target phone
-- [ ] Vision Test completes (checklist → Trivector → hue → results) and Save profile writes JSON
-- [ ] Result disclaimer visible (screening ≠ diagnosis; screens vary)
-- [ ] Photos: no-profile CTA; with profile → Corrected @ 0% divider; Strength matches saved %; Save/Share
-- [ ] Photos on Android 13+: Photo Picker works without granting all-files storage
-- [ ] Camera: permission rationale / deny → Open settings; live Corrected when profile exists
-- [ ] Camera: freeze/capture → ColorSight album; loupe names colors; Lens nav enables loupe
-- [ ] Settings: Show camera FPS toggles overlay; note measured fps on device
+**Verified on desktop (this repo):** unit suite, trivector/photos/camera smokes, Welcome/Home/Profile/Settings UI logic.
+
+**Not verified without a real device / APK build** — please run these yourself:
+
+- [ ] APK installs (`adb install`) and opens without crash
+- [ ] First launch → Welcome → color test; later launch → Home
+- [ ] Android back button returns to Home from feature screens
+- [ ] Floating nav + safe areas on a notched phone; nothing under the nav
+- [ ] Vision Test → Save profile; Profile shows type / severity / date / axes
+- [ ] Photos: Android 13+ Photo Picker (no all-files grant); Corrected @ 0% divider; Save + Share sheet
+- [ ] MediaStore album **ColorSight** appears in Gallery
+- [ ] FileProvider share to WhatsApp / Files works
+- [ ] Camera: permission deny → Open settings; live Corrected; freeze/capture; FPS overlay
+- [ ] Lens nav enables loupe; `name_color` stable
+- [ ] Record on-device FPS (Settings → Show camera FPS) and note mid-range phone numbers
 
 ## Known issues / notes
 
-- **Buildozer on Windows**: prefer WSL2 or a Linux VM; expect long first builds (NDK/SDK download).
-- **Python 3.13**: confirm Kivy wheel availability for your OS; if desktop install fails, use 3.11/3.12 in the venv.
-- **Kivy camera on desktop** differs from Android `Camera` / `Camera2` providers — Phase 1 must test live feed on-device.
-- **Radius 999**: never pass unclamped into `RoundedRectangle` — use `clamp_radius` (see `design.md`).
-- Soft shadows are approximated with layered rounded rects; they will not match Material elevation exactly.
-- **`core/` packaging**: Android builds must include `core/*` (color engine) alongside `colorsight/*`.
+- **Buildozer on Windows**: use WSL2 (above); expect long first builds.
+- **Python 3.13 desktop**: if Kivy wheels fail, use 3.11/3.12 in the venv.
+- **Camera4Kivy**: desktop uses OpenCV; Android Preview widget callback may need a device pass to fully wire `AndroidCameraSource.push_frame_rgb`.
+- **FileProvider**: resources are packaged; if share fails, manually merge `fileprovider_snippet.xml`.
+- **Radius 999**: always clamp (see `design.md`).
+- Soft shadows are layered rounded rects, not Material elevation.
 
 ## `buildozer.spec` highlights
 
-- `package.name` / `package.domain` set for ColorSight
-- Orientation: portrait
-- Requirements: `python3,kivy,numpy,opencv` (OpenCV Android recipe may need pinning — verify on first real build)
-- Permissions: camera + storage as above
-- Icons + fonts via `assets/**`; engine via `core/*`
+- Title **ColorSight**; `org.colorsight.colorsight`; version from `colorsight/__init__.py`
+- Portrait; api 33 / min 24; `arm64-v8a,armeabi-v7a`
+- Requirements pinned: `kivy==2.3.0`, `numpy==1.26.4`, `pillow==10.4.0`, opencv, pyjnius, android, camera4kivy
+- Icon / adaptive icon / cream `#F6F4F1` splash; FileProvider resources; `core/*` + `colorsight/*` + `assets/**`

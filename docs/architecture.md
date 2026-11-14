@@ -117,10 +117,20 @@ Frame loop: latest-frame drop (no queue) → bg thread process → single textur
 
 Helpers/widgets also: Photos `BeforeAfterViewer`, `PhotoModeToolbar`, `PreviewSeverityBar`, `TextLinkButton`, `LoadingShimmer`. Callbacks use `*_cb` names only.
 
+## Profile + Settings
+
+- **Profile:** reload from disk on enter; pastel hero (plain-language type, severity label + N/100, measured date); optional `AxisBars` when `thresholds` stored; before/after swatch strip; Retake / Fine-tune (confirm before overwrite; Reset to test result) / Clear (confirm). Optional JSON fields on `CorrectionProfile` (`measured_at`, `label`, `thresholds`, `test_severity`) — UI metadata only.
+- **Settings:** About (version + screening note), Privacy (on-device only), Display tips, Debug FPS toggle (`_FpsToggle`, not Kivy `Switch`).
+
+## App shell
+
+- First run → Welcome (CTA to Test); later → Home (`colorsight.prefs`).
+- Android/Escape back → Home from feature screens (`RootShell.go_back`).
+- Home: chips filter + navigate; avatar → Profile; menu → Settings; search bar removed.
+
 ## UI notes
 
-- Test flow: **checklist → Trivector trials (D-pad + can't see, 6 s timeout) → hue arrange → results**.
-- Photos: disk profile reload → pick → Corrected @ split 0% → Strength / save-share.
-- Camera/Lens: shared live correction + loupe (`name_color`); Settings toggles FPS overlay.
+- Test flow: **checklist → Trivector trials → hue → results**.
+- Photos / Camera / Lens as above.
 - `FloatingNavBar`: five identical slots; blue `+` FAB clamped inside pill.
 - Never name custom widgets after built-in Kivy widgets; `Icon` uses **`icon_size`**.

@@ -1,4 +1,4 @@
-"""Welcome / onboarding-style first screen."""
+"""Welcome / onboarding — first run leads to the color test."""
 
 from kivy.metrics import dp
 from kivy.uix.boxlayout import BoxLayout
@@ -7,8 +7,9 @@ from kivy.uix.screenmanager import Screen
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.widget import Widget
 
+from colorsight.prefs import mark_onboarding_done
 from colorsight.theme.tokens import Colors, Fonts, Icons, Radii, Spacing
-from colorsight.widgets import PastelCard, RoundIconButton
+from colorsight.widgets import PastelCard, PrimaryButton, RoundIconButton
 
 
 class WelcomeScreen(Screen):
@@ -16,18 +17,14 @@ class WelcomeScreen(Screen):
         super().__init__(name="welcome", **kwargs)
         self._build()
 
-    def _go_home(self, *_args):
+    def _finish(self, target: str = "test"):
+        mark_onboarding_done()
         if self.manager:
             self.manager.transition.direction = "left"
-            self.manager.current = "home"
-
-    def _open(self, screen_name):
-        def _handler(_card=None):
-            if self.manager:
-                self.manager.transition.direction = "left"
-                self.manager.current = screen_name
-
-        return _handler
+            self.manager.current = target
+            parent = self.manager.parent
+            if hasattr(parent, "set_nav_active"):
+                parent.set_nav_active(target)
 
     def _build(self):
         scroll = ScrollView(do_scroll_x=False, bar_width=0)
@@ -60,49 +57,58 @@ class WelcomeScreen(Screen):
         content.add_widget(title)
 
         subtitle = Label(
-            text="See colors more clearly — test, correct,\nand explore with a friendly toolkit.",
+            text="See colors more clearly — start with a short\nvision check, then correct photos and live video.",
             font_name=Fonts.regular,
             font_size=dp(15),
             color=Colors.text_muted,
             halign="left",
             valign="top",
             size_hint_y=None,
-            height=dp(52),
+            height=dp(56),
         )
         subtitle.bind(size=lambda *_: setattr(subtitle, "text_size", subtitle.size))
         content.add_widget(subtitle)
 
-        cta_row = BoxLayout(
-            orientation="horizontal",
-            size_hint_y=None,
-            height=dp(64),
-            spacing=dp(Spacing.md),
-        )
-        cta_row.add_widget(Widget())
-        arrow = RoundIconButton(icon=Icons.arrow_forward, diameter=56)
-        arrow.on_press_cb = self._go_home
-        cta_row.add_widget(arrow)
-        content.add_widget(cta_row)
+        cta = PrimaryButton(text="Start with the color test")
+        cta.on_press_cb = lambda *_: self._finish("test")
+        content.add_widget(cta)
 
-        content.add_widget(Widget(size_hint_y=None, height=dp(8)))
+        skip_row = BoxLayout(orientation="horizontal", size_hint_y=None, height=dp(56))
+        skip_row.add_widget(Widget())
+        arrow = RoundIconButton(icon=Icons.arrow_forward, diameter=48)
+        arrow.on_press_cb = lambda *_: self._finish("home")
+        skip_row.add_widget(arrow)
+        content.add_widget(skip_row)
+
+        tip = Label(
+            text="You can explore Home anytime — the arrow skips to the toolkit.",
+            font_name=Fonts.regular,
+            font_size=dp(12),
+            color=Colors.text_muted,
+            size_hint_y=None,
+            height=dp(36),
+            halign="left",
+        )
+        tip.bind(size=lambda *_: setattr(tip, "text_size", tip.size))
+        content.add_widget(tip)
 
         cards = [
-            ("Vision Test", "Find your color vision profile", "yellow", "test"),
-            ("Photos", "Correct images from your gallery", "pink", "photos"),
-            ("Live Camera", "Real-time corrected preview", "sky", "camera"),
-            ("Magnifier Lens", "Zoom in and name the color", "mint", "lens"),
+            ("Vision Test", "Find your color vision profile", "yellow"),
+            ("Photos", "Correct images from your gallery", "pink"),
+            ("Live Camera", "Real-time corrected preview", "sky"),
+            ("Magnifier Lens", "Zoom in and name the color", "mint"),
         ]
-        for title_t, sub, palette, screen in cards:
-            card = PastelCard(
-                title=title_t,
-                subtitle=sub,
-                palette=palette,
-                size_hint_y=None,
-                height=dp(110),
-                radius=Radii.card_lg,
+        for title_t, sub, palette in cards:
+            content.add_widget(
+                PastelCard(
+                    title=title_t,
+                    subtitle=sub,
+                    palette=palette,
+                    size_hint_y=None,
+                    height=dp(100),
+                    radius=Radii.card_lg,
+                )
             )
-            card.on_select = self._open(screen)
-            content.add_widget(card)
 
         scroll.add_widget(content)
         self.add_widget(scroll)

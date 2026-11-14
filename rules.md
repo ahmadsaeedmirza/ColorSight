@@ -35,7 +35,8 @@ This is not optional. Documentation is part of the deliverable, not an afterthou
 - **Camera/Lens:** share one pipeline (`camera_source` + `camera_pipeline` + `camera_widgets`). Drop frames instead of queueing; stop capture on leave/pause. Loupe samples **original** frames for `core.name_color`. Never auto-advance app state with orphan timers (user-driven only).
 - **Settings:** optional camera FPS overlay via `app.show_camera_fps` (not a Kivy `Switch` — use a custom toggle).
 - Desktop-first during development: `python main.py` must keep working; `python -m unittest discover -s tests` must stay green when touching `/core`.
-- Do not implement Phase 2 (system-wide color filter / Shizuku) until Phase 1 is complete and explicitly requested.
+- **Phase 1 is complete.** Do not implement Phase 2 (system-wide SurfaceFlinger 4×4 color matrix via Shizuku) until explicitly requested after the device checklist in `production.md`.
+- **Profile fine-tune** is the only UI that overwrites the saved correction profile (always confirm). Photos/Camera Strength remain preview-only.
 - **Never name custom widgets after built-in Kivy widgets** (`ProgressBar`, `Button`, `Label`, `Slider`, `Image`, `Switch`, …). Kivy binds `style.kv` by class name and will crash or mis-style collisions. Use prefixed names (e.g. `PillProgressBar`, `PreviewSeverityBar`).
 - **Kivy callback props:** do **not** name an `ObjectProperty` `on_<name>` when the same widget also has a Kivy property `<name>` (e.g. `mode` + `on_mode`). Kivy will call that attribute on change and crash if it is `None`. Use `mode_cb` / `save_cb` / `split_cb` / `change_cb`, and always `if callable(cb)` before invoke.
 - **Icons:** use `colorsight.widgets.Icon` + Material Icons ligatures — never Lexend/emoji for chrome icons. Glyph size = **`icon_size=`** (default 24); never pass Kivy widget `size=` a single number.

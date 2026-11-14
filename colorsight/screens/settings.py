@@ -1,16 +1,18 @@
-"""Settings — debug toggles (FPS) and about copy."""
+"""Settings — About, Privacy, Display tips, Debug."""
 
 from __future__ import annotations
 
 from kivy.app import App
 from kivy.metrics import dp
+from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.label import Label
 from kivy.uix.screenmanager import Screen
+from kivy.uix.scrollview import ScrollView
 from kivy.uix.widget import Widget
-from kivy.uix.behaviors import ButtonBehavior
 from kivy.graphics import Color, RoundedRectangle
 
+from colorsight import __version__
 from colorsight.theme.geometry import clamped_radii
 from colorsight.theme.tokens import Colors, Fonts, Icons, Radii, Spacing
 from colorsight.widgets import PastelCard, RoundIconButton
@@ -67,6 +69,7 @@ class _FpsToggle(ButtonBehavior, BoxLayout):
 class SettingsScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(name="settings", **kwargs)
+        scroll = ScrollView(do_scroll_x=False, bar_width=0)
         root = BoxLayout(
             orientation="vertical",
             padding=[
@@ -76,7 +79,10 @@ class SettingsScreen(Screen):
                 dp(Spacing.nav_clearance),
             ],
             spacing=dp(Spacing.md),
+            size_hint_y=None,
         )
+        root.bind(minimum_height=root.setter("height"))
+
         header = BoxLayout(orientation="horizontal", size_hint_y=None, height=dp(44), spacing=dp(8))
         back = RoundIconButton(icon=Icons.arrow_back, diameter=40)
         back.on_press_cb = lambda *_: self._go("home")
@@ -95,6 +101,40 @@ class SettingsScreen(Screen):
 
         root.add_widget(
             PastelCard(
+                title="About",
+                subtitle=(
+                    f"ColorSight v{__version__}\n"
+                    "A screening toolkit for color vision — not a medical diagnosis. "
+                    "Results can vary with screen brightness and calibration."
+                ),
+                palette="mint",
+                auto_height=True,
+                size_hint_y=None,
+            )
+        )
+        root.add_widget(
+            PastelCard(
+                title="Privacy",
+                subtitle="Everything runs on your phone. Photos and camera frames are never uploaded.",
+                palette="sky",
+                auto_height=True,
+                size_hint_y=None,
+            )
+        )
+        root.add_widget(
+            PastelCard(
+                title="Display tips",
+                subtitle=(
+                    "For the Vision Test: raise brightness, turn off night mode / dark theme, "
+                    "and disable blue-light filters so colors stay accurate."
+                ),
+                palette="yellow",
+                auto_height=True,
+                size_hint_y=None,
+            )
+        )
+        root.add_widget(
+            PastelCard(
                 title="Debug",
                 subtitle="Optional tools for measuring live camera performance.",
                 palette="lavender",
@@ -103,17 +143,9 @@ class SettingsScreen(Screen):
             )
         )
         root.add_widget(_FpsToggle())
-        root.add_widget(
-            PastelCard(
-                title="About ColorSight",
-                subtitle="Assistive color tools. Vision Test results are a screening aid, not a medical diagnosis.",
-                palette="mint",
-                auto_height=True,
-                size_hint_y=None,
-            )
-        )
-        root.add_widget(Widget())
-        self.add_widget(root)
+        root.add_widget(Widget(size_hint_y=None, height=dp(8)))
+        scroll.add_widget(root)
+        self.add_widget(scroll)
 
     def _go(self, name: str):
         if self.manager:

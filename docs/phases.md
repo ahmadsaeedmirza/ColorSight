@@ -6,39 +6,31 @@
 - Design tokens and reusable widgets
 - ScreenManager shell + Material Icons + radius clamping + nav clearance
 
-## Phase 1 — Color vision assist
-
-### Done
+## Phase 1 — Color vision assist — **COMPLETE**
 
 | Piece | Status |
 |-------|--------|
 | `/core` Machado simulation + daltonization + `CorrectionProfile` + `name_color` | Done |
 | Unit tests for engine | Done |
-| **Vision Test UI** — Trivector CCT (Landolt C) + hue arrange + results + save profile | Done |
-| Test crash fix — `PillProgressBar` rename (no Kivy builtin name collision) | Done |
-| Plate generator (legacy) — dense packing, confusion palettes, validation + recognizability tests | Done (kept, not in live flow) |
-| Shape legibility — open counters, recognizability tests, contact sheet | Done |
-| Trivector core — u'v' axes, staircase, model-observer calibration, accuracy tests | Done |
-| ArrowPad Icon crash fix — use `icon_size`, not Kivy `size=` float | Done |
-| Vision Test UI polish — D-pad, Question N, crisp stim blit, results labels/auto-height | Done |
-| UI polish — result swatches, friendly save copy, nav slots + centered FAB | Done |
-| **Photos / image correction** — profile gate, picker, before/after, modes, MediaStore save | Done |
-| Photos toolbar crash fix — rename `on_mode`/`on_split` ObjectProperties to `*_cb` | Done |
-| Photos Strength default/reset, divider labels, mode Save/Share, comparison card | Done |
-| Photos default Corrected @ split 0% + disk profile reload | Done |
-| **Camera** — live OpenCV/Camera4Kivy pipeline, modes, freeze/capture | Done |
-| **Lens** — shared loupe + `name_color` (opens Camera with loupe on) | Done |
-| Settings FPS debug toggle | Done |
-
-### Remaining in-app features
-
-| Feature | Description |
-|---------|-------------|
-| Correction profile UI | View/edit saved profile on Profile screen (“Update my profile”) |
+| **Vision Test UI** — Trivector CCT + hue arrange + results + save profile | Done |
+| Plate generator (legacy) — kept + tested, not in live UI | Done |
+| Trivector core + calibration tests | Done |
+| **Photos** — pick, Corrected@0% divider, Strength, save/share, comparison | Done |
+| **Camera** — live OpenCV / Camera4Kivy pipeline, freeze/capture | Done |
+| **Lens** — shared loupe + `name_color` | Done |
+| **Profile** — hero card, swatches, fine-tune (only overwrite), clear | Done |
+| **Settings** — About, Privacy, Display tips, FPS debug | Done |
+| First-run Welcome → test; later launches → Home; Android back | Done |
+| Buildozer.spec + icons/splash + WSL build guide + `tools/build_android.sh` | Done |
 
 Stack: NumPy + OpenCV in `core/`, Kivy UI in `colorsight/`, Buildozer packaging.
 
 ## Phase 2 — System-wide filter *(parked / later)*
 
-- Android system-wide 4×4 SurfaceFlinger color matrix via Shizuku
-- Out of scope until Phase 1 UI features above are done and this phase is requested
+**Not implemented.** When requested:
+
+- Android system-wide **4×4 SurfaceFlinger color matrix** applied via **Shizuku** (or equivalent privileged bridge)
+- Map the user’s `CorrectionProfile` matrix into a display color transform so *all* apps get the correction
+- Requires separate permissions / user setup for Shizuku; out of scope for Phase 1 APK
+
+Do not start Phase 2 until Phase 1 device checklist in `production.md` is signed off and this phase is explicitly requested.

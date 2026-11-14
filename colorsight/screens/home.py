@@ -1,6 +1,9 @@
-"""Home screen with chips and pastel feature grid."""
+"""Home screen — feature grid with working chips and avatar → Profile."""
+
+from __future__ import annotations
 
 from kivy.metrics import dp
+from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.label import Label
@@ -10,20 +13,23 @@ from kivy.uix.widget import Widget
 from kivy.graphics import Color, Ellipse
 
 from colorsight.theme.tokens import Colors, Fonts, Icons, Spacing
-from colorsight.widgets import ChipRow, Icon, PastelCard, PillSearchBar
+from colorsight.widgets import ChipRow, Icon, PastelCard
 
 
-class _Avatar(Widget):
-    def __init__(self, **kwargs):
+class _AvatarButton(ButtonBehavior, Widget):
+    """Tappable avatar — opens Profile."""
+
+    def __init__(self, on_tap=None, **kwargs):
         super().__init__(**kwargs)
         self.size_hint = (None, None)
-        self.size = (dp(40), dp(40))
+        self.size = (dp(44), dp(44))
+        self._on_tap = on_tap
         self._icon = Icon(
             icon=Icons.profile,
             icon_size=22,
             color=(1, 1, 1, 1),
             size_hint=(None, None),
-            size=(dp(40), dp(40)),
+            size=(dp(44), dp(44)),
         )
         self.add_widget(self._icon)
         self.bind(pos=self._draw, size=self._draw)
@@ -37,10 +43,44 @@ class _Avatar(Widget):
         self._icon.pos = self.pos
         self._icon.size = self.size
 
+    def on_release(self):
+        if callable(self._on_tap):
+            self._on_tap()
+
+
+class _MenuButton(ButtonBehavior, BoxLayout):
+    def __init__(self, on_tap=None, **kwargs):
+        super().__init__(**kwargs)
+        self.size_hint = (None, None)
+        self.size = (dp(44), dp(44))
+        self._on_tap = on_tap
+        self.add_widget(
+            Icon(
+                icon=Icons.menu,
+                icon_size=26,
+                color=Colors.text,
+                size_hint=(1, 1),
+            )
+        )
+
+    def on_release(self):
+        if callable(self._on_tap):
+            self._on_tap()
+
 
 class HomeScreen(Screen):
+    _FEATURES = [
+        ("Vision Test", "Trivector color check", "yellow", "test", 150),
+        ("Photos", "Fix gallery colors", "pink", "photos", 150),
+        ("Camera", "Live correction", "sky", "camera", 170),
+        ("Lens", "Name that color", "mint", "lens", 170),
+        ("Profile", "Your correction", "peach", "profile", 150),
+        ("Settings", "Preferences", "lavender", "settings", 150),
+    ]
+
     def __init__(self, **kwargs):
         super().__init__(name="home", **kwargs)
+        self._filter = "All"
         self._build()
 
     def _open(self, screen_name):
@@ -59,14 +99,20 @@ class HomeScreen(Screen):
             "Test": "test",
             "Photos": "photos",
             "Camera": "camera",
+            "Lens": "lens",
+            "Profile": "profile",
         }
+        # Chip row filters the grid; tapping a feature chip also jumps there
+        self._filter = selected
+        self._rebuild_grid()
         target = mapping.get(selected)
-        if target and self.manager:
+        if target and selected != "All" and self.manager:
             self.manager.current = target
 
     def _build(self):
+        self.clear_widgets()
         scroll = ScrollView(do_scroll_x=False, bar_width=0)
-        content = BoxLayout(
+        self._content = BoxLayout(
             orientation="vertical",
             padding=[
                 dp(Spacing.screen_x),
@@ -77,24 +123,17 @@ class HomeScreen(Screen):
             spacing=dp(Spacing.md),
             size_hint_y=None,
         )
-        content.bind(minimum_height=content.setter("height"))
+        self._content.bind(minimum_height=self._content.setter("height"))
 
         header = BoxLayout(
             orientation="horizontal",
             size_hint_y=None,
             height=dp(44),
         )
-        menu = Icon(
-            icon=Icons.menu,
-            icon_size=26,
-            color=Colors.text,
-            size_hint=(None, None),
-            size=(dp(40), dp(40)),
-        )
-        header.add_widget(menu)
+        header.add_widget(_MenuButton(on_tap=self._open("settings")))
         header.add_widget(Widget())
-        header.add_widget(_Avatar())
-        content.add_widget(header)
+        header.add_widget(_AvatarButton(on_tap=self._open("profile")))
+        self._content.add_widget(header)
 
         greet = Label(
             text="Your toolkit",
@@ -107,31 +146,56 @@ class HomeScreen(Screen):
             height=dp(36),
         )
         greet.bind(size=lambda *_: setattr(greet, "text_size", greet.size))
-        content.add_widget(greet)
+        self._content.add_widget(greet)
 
-        content.add_widget(PillSearchBar(hint="Search features"))
-
-        chips = ChipRow(options=["All", "Test", "Photos", "Camera"], selected="All")
+        chips = ChipRow(
+            options=["All", "Test", "Photos", "Camera", "Lens", "Profile"],
+            selected="All",
+        )
         chips.on_change = self._on_chip
-        content.add_widget(chips)
+        self._content.add_widget(chips)
 
-        features = [
-            ("Vision Test", "Trivector color check", "yellow", "test", 150),
-            ("Photos", "Fix gallery colors", "pink", "photos", 150),
-            ("Camera", "Live correction", "sky", "camera", 170),
-            ("Lens", "Name that color", "mint", "lens", 170),
-            ("Profile", "Your correction", "peach", "profile", 150),
-            ("Settings", "Preferences", "lavender", "settings", 150),
-        ]
-        row_h = [150, 170, 150]
+        self._grid_host = BoxLayout(orientation="vertical", size_hint_y=None, height=dp(1))
+        self._content.add_widget(self._grid_host)
+        self._rebuild_grid()
+
+        scroll.add_widget(self._content)
+        self.add_widget(scroll)
+
+    def _rebuild_grid(self):
+        self._grid_host.clear_widgets()
+        filt = self._filter
+        visible = []
+        for title, sub, palette, screen, h in self._FEATURES:
+            if filt == "All":
+                visible.append((title, sub, palette, screen, h))
+            elif filt == "Test" and screen == "test":
+                visible.append((title, sub, palette, screen, h))
+            elif filt.lower() == screen or (filt == "Lens" and screen == "lens"):
+                visible.append((title, sub, palette, screen, h))
+            elif filt == "Profile" and screen == "profile":
+                visible.append((title, sub, palette, screen, h))
+
+        if not visible:
+            visible = list(self._FEATURES)
+
+        # Pair into rows of 2
+        rows = []
+        for i in range(0, len(visible), 2):
+            rows.append(visible[i : i + 2])
+        gap = Spacing.grid_gap
+        row_heights = []
+        for row in rows:
+            row_heights.append(max(h for *_rest, h in row))
+        total_h = sum(row_heights) + gap * max(0, len(rows) - 1)
+
         grid = GridLayout(
             cols=2,
-            spacing=dp(Spacing.grid_gap),
+            spacing=dp(gap),
             size_hint_y=None,
-            height=dp(sum(row_h) + Spacing.grid_gap * 2),
+            height=dp(total_h),
         )
-
-        for title, sub, palette, screen, h in features:
+        for title, sub, palette, screen, h in visible:
             card = PastelCard(
                 title=title,
                 subtitle=sub,
@@ -141,7 +205,9 @@ class HomeScreen(Screen):
             )
             card.on_select = self._open(screen)
             grid.add_widget(card)
+        # Odd count: spacer
+        if len(visible) % 2 == 1:
+            grid.add_widget(Widget())
 
-        content.add_widget(grid)
-        scroll.add_widget(content)
-        self.add_widget(scroll)
+        self._grid_host.add_widget(grid)
+        self._grid_host.height = grid.height
