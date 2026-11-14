@@ -24,6 +24,7 @@
 | UI polish — result swatches, friendly save copy, nav slots + centered FAB | Done |
 | **Photos / image correction** — profile gate, picker, before/after, modes, MediaStore save | Done |
 | Photos toolbar crash fix — rename `on_mode`/`on_split` ObjectProperties to `*_cb` | Done |
+| Photos Strength default/reset, divider labels, mode Save/Share, comparison card | Done |
 
 ### Remaining in-app features
 

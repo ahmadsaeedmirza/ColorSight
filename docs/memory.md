@@ -4,6 +4,24 @@ Newest entries first. Append after every prompt per `rules.md`.
 
 ---
 
+## 2026-11-14 — Photos Strength, divider, save/share, comparison
+
+**Prompt:** Fix Strength default (91 not 100) + reset; divider hide on Original, show on Corrected/Simulation with labels + 44 dp hit; verify correction MAD; mode-aware Save/Share; “How I see it” comparison card; Simulation tuning hint. No `/core` changes.
+
+**Fixes**
+- Strength from `severity_for_slider(profile.severity)` on load/pick; “Reset to my result” when preview ≠ saved; hint copy under Strength.
+- Divider: `divider_visible` — Original off; Corrected/Simulation left=original / right=mode; corner labels; 44 dp handle.
+- Simulation previously showed full-frame only (no split) — now uses `before_after_split` like Corrected. Correction MAD unit test (deutan 0.91) passes (core apply_* OK).
+
+**Save/Share**
+- Save/Share export current mode at full res via `render_mode_rgb` + current Strength (profile JSON untouched).
+- Android: MediaStore album + `ACTION_SEND` FileProvider (`assets/android/file_paths.xml` + snippet). Desktop share → save + “Saved to your gallery”.
+- Export comparison card (`build_comparison_card`, longest ≤2048).
+
+**Verified:** `tests.test_photos_pipeline` + image_pipeline OK; `SMOKE_PHOTOS_OK … profile_strength_ok modes_divider_ok strength_reset_ok exports_ok`.
+
+---
+
 ## 2026-11-14 — Fix Photos toolbar mode crash (`on_mode` None)
 
 **Prompt:** Tapping Original/Corrected/Simulation crashed with `TypeError: 'NoneType' object is not callable` (photo_widgets `_tap_mode` → `mode=` → Kivy observer None).

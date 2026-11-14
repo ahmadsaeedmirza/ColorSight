@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import threading
+
 import numpy as np
 from kivy.app import App
 from kivy.clock import Clock
@@ -13,13 +14,21 @@ from kivy.uix.label import Label
 from kivy.uix.screenmanager import Screen
 from kivy.uix.widget import Widget
 
-from colorsight.image_pipeline import PREVIEW_LONGEST, load_rgb_uint8, resize_longest
-from colorsight.photo_io import pick_image, save_corrected_image
+from colorsight.image_pipeline import (
+    PREVIEW_LONGEST,
+    build_comparison_card,
+    load_rgb_uint8,
+    render_mode_rgb,
+    resize_longest,
+    severity_for_slider,
+)
+from colorsight.photo_io import pick_image, save_corrected_image, share_image
 from colorsight.screens.photo_widgets import (
     BeforeAfterViewer,
     LoadingShimmer,
     PhotoModeToolbar,
     PreviewSeverityBar,
+    TextLinkButton,
 )
 from colorsight.storage import profile_path
 from colorsight.theme.tokens import Colors, Fonts, Icons, Spacing
@@ -38,6 +47,7 @@ class PhotosScreen(Screen):
         self._cache: dict[tuple[str, float], np.ndarray] = {}
         self._mode = "corrected"
         self._preview_severity = 0.5
+        self._saved_severity = 0.5
         self._sev_ev = None
         self._busy = False
         self._status_clear = None
@@ -69,7 +79,30 @@ class PhotosScreen(Screen):
                 profile = None
         self._profile = profile
         if profile is not None:
-            self._preview_severity = float(profile.severity)
+            sev = severity_for_slider(float(profile.severity))
+            self._saved_severity = sev
+            self._preview_severity = sev
+
+    def _sync_strength_ui(self):
+        if hasattr(self, "_sev_bar"):
+            self._sev_bar.set_value(self._preview_severity, notify=False)
+        if hasattr(self, "_sev_value"):
+            self._sev_value.text = f"{int(round(self._preview_severity * 100))}"
+        self._update_reset_visibility()
+
+    def _update_reset_visibility(self):
+        if not hasattr(self, "_reset_btn"):
+            return
+        differs = abs(self._preview_severity - self._saved_severity) > 0.005
+        self._reset_btn.opacity = 1 if differs else 0
+        self._reset_btn.disabled = not differs
+        self._reset_btn.height = dp(28) if differs else 0
+
+    def _reset_strength(self, *_a):
+        self._preview_severity = self._saved_severity
+        self._sync_strength_ui()
+        self._cache.clear()
+        self._schedule_process()
 
     # --- chrome ----------------------------------------------------------
 
@@ -170,32 +203,32 @@ class PhotosScreen(Screen):
 
     def _show_viewer(self):
         self._viewer = BeforeAfterViewer(size_hint=(1, 1))
+        self._viewer.split = 0.5
         self._body.add_widget(self._viewer)
 
         self._shimmer = LoadingShimmer()
         self._body.add_widget(self._shimmer)
 
-        sev_row = BoxLayout(
+        # Strength row
+        strength_hdr = BoxLayout(
             orientation="horizontal",
             size_hint_y=None,
-            height=dp(44),
+            height=dp(22),
             spacing=dp(8),
         )
-        sev_lbl = Label(
-            text="Severity",
-            font_name=Fonts.medium,
-            font_size=dp(13),
-            color=Colors.text_muted,
-            size_hint=(None, 1),
-            width=dp(72),
-            halign="left",
-            valign="middle",
+        strength_hdr.add_widget(
+            Label(
+                text="Strength",
+                font_name=Fonts.semibold,
+                font_size=dp(13),
+                color=Colors.text,
+                size_hint=(None, 1),
+                width=dp(72),
+                halign="left",
+                valign="middle",
+            )
         )
-        sev_lbl.bind(size=lambda *_: setattr(sev_lbl, "text_size", sev_lbl.size))
-        sev_row.add_widget(sev_lbl)
-        self._sev_bar = PreviewSeverityBar(value=self._preview_severity)
-        self._sev_bar.change_cb = self._on_severity
-        sev_row.add_widget(self._sev_bar)
+        strength_hdr.add_widget(Widget())
         self._sev_value = Label(
             text=f"{int(round(self._preview_severity * 100))}",
             font_name=Fonts.semibold,
@@ -204,21 +237,69 @@ class PhotosScreen(Screen):
             size_hint=(None, 1),
             width=dp(36),
         )
-        sev_row.add_widget(self._sev_value)
-        self._body.add_widget(sev_row)
+        strength_hdr.add_widget(self._sev_value)
+        self._body.add_widget(strength_hdr)
+
+        hint = Label(
+            text="Starts at your test result. Move it to fine-tune the preview.",
+            font_name=Fonts.regular,
+            font_size=dp(11),
+            color=Colors.text_muted,
+            size_hint_y=None,
+            height=dp(20),
+            halign="left",
+            valign="middle",
+        )
+        hint.bind(size=lambda *_: setattr(hint, "text_size", hint.size))
+        self._body.add_widget(hint)
+
+        self._sev_bar = PreviewSeverityBar(value=self._preview_severity)
+        self._sev_bar.change_cb = self._on_severity
+        self._body.add_widget(self._sev_bar)
+
+        self._reset_btn = TextLinkButton(text="Reset to my result")
+        self._reset_btn.bind(on_release=self._reset_strength)
+        self._body.add_widget(self._reset_btn)
+        self._update_reset_visibility()
+
+        self._sim_hint = Label(
+            text="Adjust the strength until it matches how you see it.",
+            font_name=Fonts.regular,
+            font_size=dp(11),
+            color=Colors.text_muted,
+            size_hint_y=None,
+            height=dp(0),
+            opacity=0,
+            halign="left",
+            valign="middle",
+        )
+        self._sim_hint.bind(size=lambda *_: setattr(self._sim_hint, "text_size", self._sim_hint.size))
+        self._body.add_widget(self._sim_hint)
 
         self._toolbar = PhotoModeToolbar()
         self._toolbar.mode_cb = self._on_mode
-        self._toolbar.save_cb = self._on_save
-        # Assign mode after mode_cb so the first sync does not call a missing handler
+        self._toolbar.save_cb = lambda: self._export_current(share=False)
+        self._toolbar.share_cb = lambda: self._export_current(share=True)
         self._toolbar.mode = self._mode
         self._body.add_widget(self._toolbar)
+        self._update_sim_hint()
 
-        change = PrimaryButton(text="Choose another photo")
+        actions = BoxLayout(
+            orientation="horizontal",
+            size_hint_y=None,
+            height=dp(48),
+            spacing=dp(8),
+        )
+        change = PrimaryButton(text="Choose another")
         change.bg_color = (1, 1, 1, 1)
         change.text_color = Colors.text
         change.on_press_cb = lambda *_: self._pick()
-        self._body.add_widget(change)
+        actions.add_widget(change)
+
+        export = PrimaryButton(text="Export comparison")
+        export.on_press_cb = lambda *_: self._export_comparison(share=False)
+        actions.add_widget(export)
+        self._body.add_widget(actions)
 
         self._status = Label(
             text="",
@@ -230,19 +311,27 @@ class PhotosScreen(Screen):
         )
         self._body.add_widget(self._status)
 
+        self._sync_strength_ui()
         self._push_viewer_images()
 
+    def _update_sim_hint(self):
+        if not hasattr(self, "_sim_hint"):
+            return
+        show = self._mode == "simulation"
+        self._sim_hint.opacity = 1 if show else 0
+        self._sim_hint.height = dp(20) if show else 0
+
     def _push_viewer_images(self):
-        if self._preview_rgb is None:
+        if self._preview_rgb is None or not hasattr(self, "_viewer"):
             return
         right = None
-        if self._mode == "corrected":
-            right = self._cache_get("corrected")
-        elif self._mode == "simulation":
-            right = self._cache_get("simulation")
+        if self._mode in ("corrected", "simulation"):
+            right = self._cache_get(self._mode)
         if right is None and self._mode != "original":
             self._schedule_process()
-            self._viewer.set_images(self._preview_rgb, self._preview_rgb, "original")
+            # Keep mode so divider intent is clear; use original as placeholder right
+            # until cache fills (avoids silently looking like a no-op correction).
+            self._viewer.set_images(self._preview_rgb, None, "original")
             return
         self._viewer.set_images(self._preview_rgb, right, self._mode)
 
@@ -261,7 +350,7 @@ class PhotosScreen(Screen):
                 return
             try:
                 full = load_rgb_uint8(path)
-            except Exception as exc:  # noqa: BLE001
+            except Exception:  # noqa: BLE001
                 log.exception("load failed")
                 self._set_status("Couldn't read that image")
                 return
@@ -270,6 +359,10 @@ class PhotosScreen(Screen):
             self._preview_rgb = resize_longest(full, PREVIEW_LONGEST)
             self._cache.clear()
             self._mode = "corrected"
+            # Re-sync strength from saved profile whenever a new photo is loaded
+            if self._profile is not None:
+                self._preview_severity = severity_for_slider(float(self._profile.severity))
+                self._saved_severity = self._preview_severity
             self._rebuild_body()
             self._schedule_process()
 
@@ -277,14 +370,17 @@ class PhotosScreen(Screen):
 
     def _on_mode(self, mode: str):
         self._mode = mode
+        self._update_sim_hint()
         self._push_viewer_images()
 
     def _on_severity(self, value: float):
-        self._preview_severity = float(value)
+        self._preview_severity = severity_for_slider(float(value))
         if hasattr(self, "_sev_value"):
-            self._sev_value.text = f"{int(round(value * 100))}"
-        # Invalidate severity-dependent cache entries
-        self._cache = {k: v for k, v in self._cache.items() if abs(k[1] - value) < 1e-6}
+            self._sev_value.text = f"{int(round(self._preview_severity * 100))}"
+        self._update_reset_visibility()
+        # Drop caches that do not match the new strength
+        key_sev = round(self._preview_severity, 3)
+        self._cache = {k: v for k, v in self._cache.items() if abs(k[1] - key_sev) < 1e-6}
         if self._sev_ev is not None:
             self._sev_ev.cancel()
         self._sev_ev = Clock.schedule_once(lambda dt: self._schedule_process(), 0.10)
@@ -303,10 +399,6 @@ class PhotosScreen(Screen):
             need.append("corrected")
         if self._cache_get("simulation") is None:
             need.append("simulation")
-        # Always ensure current mode is ready; cache both for instant toggle
-        if not need and self._mode != "original":
-            self._push_viewer_images()
-            return
         if not need:
             self._push_viewer_images()
             return
@@ -319,16 +411,10 @@ class PhotosScreen(Screen):
         kinds = list(need)
 
         def _work():
-            from core.engine import apply_correction, apply_simulation
-            from core.profile import CorrectionProfile
-
             out: dict[str, np.ndarray] = {}
             try:
-                if "corrected" in kinds:
-                    tmp = CorrectionProfile.create(cvd, sev)
-                    out["corrected"] = apply_correction(preview, tmp)
-                if "simulation" in kinds:
-                    out["simulation"] = apply_simulation(preview, cvd, sev)
+                for kind in kinds:
+                    out[kind] = render_mode_rgb(preview, kind, cvd_type=cvd, severity=sev)
             except Exception:
                 log.exception("preview process failed")
                 out = {}
@@ -345,15 +431,53 @@ class PhotosScreen(Screen):
 
         threading.Thread(target=_work, daemon=True).start()
 
-    # --- save ------------------------------------------------------------
+    # --- save / share / comparison ---------------------------------------
 
-    def _on_save(self):
+    def _export_current(self, *, share: bool):
         if self._full_rgb is None or self._profile is None:
             return
         if self._busy:
             self._set_status("Still preparing preview…")
             return
-        self._set_status("Saving…")
+        self._set_status("Sharing…" if share else "Saving…")
+        if hasattr(self, "_shimmer"):
+            self._shimmer.start()
+        full = self._full_rgb
+        sev = float(self._preview_severity)
+        cvd = self._profile.type
+        mode = self._mode
+        prefix = {"original": "Original", "corrected": "Corrected", "simulation": "Simulation"}.get(
+            mode, "ColorSight"
+        )
+
+        def _work():
+            msg = "Couldn't save that photo"
+            try:
+                rgb = render_mode_rgb(full, mode, cvd_type=cvd, severity=sev)
+                name = f"ColorSight_{prefix}"
+                if share:
+                    msg = share_image(rgb, preferred_name=name, fmt="jpg")
+                else:
+                    msg = save_corrected_image(rgb, preferred_name=name, fmt="jpg")
+            except Exception:
+                log.exception("export failed")
+
+            def _done(_dt=None):
+                if hasattr(self, "_shimmer"):
+                    self._shimmer.stop()
+                self._set_status(msg)
+
+            Clock.schedule_once(_done, 0)
+
+        threading.Thread(target=_work, daemon=True).start()
+
+    def _export_comparison(self, *, share: bool):
+        if self._full_rgb is None or self._profile is None:
+            return
+        if self._busy:
+            self._set_status("Still preparing preview…")
+            return
+        self._set_status("Sharing…" if share else "Saving…")
         if hasattr(self, "_shimmer"):
             self._shimmer.start()
         full = self._full_rgb
@@ -361,16 +485,17 @@ class PhotosScreen(Screen):
         cvd = self._profile.type
 
         def _work():
-            from core.engine import apply_correction
-            from core.profile import CorrectionProfile
-
             msg = "Couldn't save that photo"
             try:
-                tmp = CorrectionProfile.create(cvd, sev)
-                corrected = apply_correction(full, tmp)
-                msg = save_corrected_image(corrected, fmt="jpg")
+                sim = render_mode_rgb(full, "simulation", cvd_type=cvd, severity=sev)
+                card = build_comparison_card(full, sim)
+                name = "ColorSight_HowISeeIt"
+                if share:
+                    msg = share_image(card, preferred_name=name, fmt="jpg")
+                else:
+                    msg = save_corrected_image(card, preferred_name=name, fmt="jpg")
             except Exception:
-                log.exception("save failed")
+                log.exception("comparison export failed")
 
             def _done(_dt=None):
                 if hasattr(self, "_shimmer"):
@@ -386,7 +511,8 @@ class PhotosScreen(Screen):
             self._status.text = text
         if self._status_clear is not None:
             self._status_clear.cancel()
-        if text and "gallery" not in text.lower():
+        sticky = any(k in text.lower() for k in ("gallery", "share sheet"))
+        if text and not sticky:
             self._status_clear = Clock.schedule_once(
                 lambda dt: setattr(self._status, "text", "") if hasattr(self, "_status") else None,
                 3.5,

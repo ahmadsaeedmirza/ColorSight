@@ -97,14 +97,15 @@ Reuses **`core.apply_correction`**, **`core.apply_simulation`**, and **`Correcti
 |------|----------|
 | Profile gate | Load via `storage.profile_path()` / `app.correction_profile`. No profile → pink CTA card → Test. |
 | Pick | Desktop: tkinter jpg/png/webp. Android 13+: Photo Picker (`PICK_IMAGES`); older: `GET_CONTENT` + optional `READ_MEDIA_IMAGES` / `READ_EXTERNAL_STORAGE`. |
-| Preview | Longest side ≤ **1080**; bg thread + shimmer; ~100 ms severity debounce; cache Corrected/Simulation for instant mode toggle. |
-| Modes | Original / Corrected (before–after split) / Simulation (“how this looks to you”). |
-| Severity | **Preview-only** via `CorrectionProfile.create(type, sev)` — never writes the saved JSON. |
-| Save | Full-res correction → JPEG q95. Desktop: `Pictures/ColorSight/`. Android: MediaStore album **ColorSight** (scoped storage). UI: “Saved to your gallery” (no paths). |
+| Preview | Longest side ≤ **1080**; bg thread + shimmer; ~100 ms Strength debounce; cache Corrected/Simulation for instant mode toggle. |
+| Modes | Original (no divider) / Corrected & Simulation (left=original, right=mode, labels, 50% start). |
+| Strength | Defaults to saved profile severity (percent-rounded). Preview-only via `render_mode_rgb` / `CorrectionProfile.create` — never writes JSON. “Reset to my result” when overridden. |
+| Save / Share | Full-res for **current mode** + current Strength. Android MediaStore + `ACTION_SEND` FileProvider; desktop save fallback. |
+| Comparison | `build_comparison_card` — “Normal vision” \| “How I see it”, brand footer, longest ≤2048. |
 
-Helpers: `colorsight/image_pipeline.py`, `colorsight/photo_io.py`. Widgets: `BeforeAfterViewer`, `PhotoModeToolbar`, `PreviewSeverityBar`, `LoadingShimmer` (not named `Slider`/`Image`).
+Helpers: `image_pipeline.py` (`render_mode_rgb`, `build_comparison_card`, `severity_for_slider`, `divider_visible`), `photo_io.py` (`share_image`). Widgets: `BeforeAfterViewer`, `PhotoModeToolbar` (save+share), `PreviewSeverityBar`, `TextLinkButton`, `LoadingShimmer`.
 
-Toolbar/viewer optional callbacks are `mode_cb` / `save_cb` / `split_cb` / `change_cb` — **not** `on_mode` / `on_split` ObjectProperties (those clash with Kivy’s auto `on_<prop>` handlers and caused a NoneType crash on mode tap).
+Callbacks: `mode_cb` / `save_cb` / `share_cb` / `split_cb` / `change_cb` — never `on_<prop>` ObjectProperties.
 
 ## UI notes
 

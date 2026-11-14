@@ -6,10 +6,11 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image as PILImage
-from PIL import ImageOps
+from PIL import ImageDraw, ImageFont, ImageOps
 
 
 PREVIEW_LONGEST = 1080
+COMPARISON_LONGEST = 2048
 
 
 def load_rgb_uint8(path: str | Path) -> np.ndarray:
@@ -89,3 +90,92 @@ def encode_image(rgb: np.ndarray, path: str | Path, *, quality: int = 95) -> Pat
         path = path.with_suffix(".jpg")
         im.save(path, format="JPEG", quality=int(quality), optimize=True)
     return path
+
+
+def mean_abs_diff(a: np.ndarray, b: np.ndarray) -> float:
+    """Mean absolute per-channel difference (0–255 scale)."""
+    if a.shape != b.shape:
+        raise ValueError("shapes must match")
+    return float(np.mean(np.abs(a.astype(np.float64) - b.astype(np.float64))))
+
+
+def severity_for_slider(profile_severity: float) -> float:
+    """Map saved 0–1 severity onto the slider scale (percent steps)."""
+    s = float(np.clip(profile_severity, 0.0, 1.0))
+    return round(s * 100.0) / 100.0
+
+
+def divider_visible(mode: str) -> bool:
+    """Divider/handle shown for Corrected and Simulation only."""
+    return mode in ("corrected", "simulation")
+
+
+def right_label_for_mode(mode: str) -> str:
+    if mode == "simulation":
+        return "Simulation"
+    if mode == "corrected":
+        return "Corrected"
+    return ""
+
+
+def render_mode_rgb(original: np.ndarray, mode: str, *, cvd_type, severity: float) -> np.ndarray:
+    """Full-res (or any size) RGB for the active mode. Does not touch saved profiles."""
+    from core.engine import apply_correction, apply_simulation
+    from core.profile import CorrectionProfile
+
+    if mode == "original":
+        return np.ascontiguousarray(original)
+    sev = float(np.clip(severity, 0.0, 1.0))
+    if mode == "simulation":
+        return apply_simulation(original, cvd_type, sev)
+    # corrected (default)
+    tmp = CorrectionProfile.create(cvd_type, sev)
+    return apply_correction(original, tmp)
+
+
+def build_comparison_card(
+    original: np.ndarray,
+    simulation: np.ndarray,
+    *,
+    longest: int = COMPARISON_LONGEST,
+    left_caption: str = "Normal vision",
+    right_caption: str = "How I see it",
+    brand: str = "ColorSight",
+) -> np.ndarray:
+    """Side-by-side pastel comparison card (max ``longest`` on the long side)."""
+    if original.shape != simulation.shape:
+        raise ValueError("original and simulation must match shape")
+    pair = before_after_split(original, simulation, 0.5)
+    pair = resize_longest(pair, longest=longest)
+    h, w = pair.shape[:2]
+    pad = max(12, w // 40)
+    footer = max(36, h // 14)
+    label_h = max(28, h // 18)
+    canvas_h = h + label_h + footer + pad
+    canvas_w = w + pad * 2
+    # Pastel cream background (#F6F4F1)
+    bg = np.full((canvas_h, canvas_w, 3), (246, 244, 241), dtype=np.uint8)
+    y0 = pad // 2 + label_h
+    bg[y0 : y0 + h, pad : pad + w] = pair
+
+    im = PILImage.fromarray(bg, mode="RGB")
+    draw = ImageDraw.Draw(im)
+    try:
+        font = ImageFont.truetype("arial.ttf", max(14, label_h // 2))
+        font_sm = ImageFont.truetype("arial.ttf", max(12, footer // 3))
+    except OSError:
+        font = ImageFont.load_default()
+        font_sm = font
+
+    # Captions over left / right halves
+    mid = pad + w // 2
+    draw.text((pad + 8, 6), left_caption, fill=(28, 28, 28), font=font)
+    # right caption roughly right-aligned in right half
+    tw = draw.textlength(right_caption, font=font) if hasattr(draw, "textlength") else len(right_caption) * 7
+    draw.text((max(mid + 8, pad + w - 8 - tw), 6), right_caption, fill=(28, 28, 28), font=font)
+    # Center divider tick
+    draw.line([(mid, y0), (mid, y0 + h)], fill=(255, 255, 255), width=2)
+    # Brand footer
+    bw = draw.textlength(brand, font=font_sm) if hasattr(draw, "textlength") else len(brand) * 6
+    draw.text(((canvas_w - bw) / 2, canvas_h - footer + 8), brand, fill=(107, 107, 107), font=font_sm)
+    return np.ascontiguousarray(np.asarray(im, dtype=np.uint8))

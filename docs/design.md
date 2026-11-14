@@ -40,6 +40,8 @@ Registered as `Fonts.icons` (`MaterialIcons`). Use ligature names from `Icons` i
 | `arrow_forward` | `arrow_forward` | Welcome CTA |
 | `arrow_back` | `arrow_back` | Placeholder / Photos back |
 | `save` | `save` | Photos toolbar |
+| `share` | `share` | Photos share |
+| `compare` | `compare` | Comparison export (optional) |
 | `drag_handle` | `drag_handle` | Before/after divider knob |
 | `add_photo` | `add_photo_alternate` | Photos empty state (optional) |
 | `tune` | `tune` | Severity / preview strength |
@@ -148,8 +150,9 @@ Apply the **same** clamped value to fill **and** matching shadow layers. Used by
 | `Numpad` (test) | Legacy digit pad (plates flow retired from UI) |
 | `HueStrip` (test) | Tap-to-swap hue tiles for arrangement step |
 | `BeforeAfterViewer` (photos) | Pinch/pan stage + before/after divider (round white handle + Material `drag_handle`) |
-| `PhotoModeToolbar` (photos) | Dark pill segments Original \| Corrected \| Simulation + Save; callbacks via `mode_cb` / `save_cb` (never `on_mode` ObjectProperty) |
-| `PreviewSeverityBar` (photos) | Preview-only severity track (**not** named `Slider`); `change_cb` — does not persist profile |
+| `PhotoModeToolbar` (photos) | Dark pill Original \| Corrected \| Simulation + Save + Share (`mode_cb` / `save_cb` / `share_cb`) |
+| `PreviewSeverityBar` (photos) | Strength track (**not** `Slider`); percent snap; `change_cb` — preview only |
+| `TextLinkButton` (photos) | “Reset to my result” text action |
 | `LoadingShimmer` (photos) | Thin animated bar while bg-thread preview/save runs |
 
 ## Screen list
@@ -159,15 +162,17 @@ Apply the **same** clamped value to fill **and** matching shadow layers. Used by
 | `welcome` | Big title, subtitle, dark arrow CTA, stacked pastel feature cards |
 | `home` | Header (menu + avatar), chips, pastel feature grid |
 | `test` | **Vision test** — checklist → Trivector Landolt C → hue arrange → results (Save profile) |
-| `photos` | **Image correction** — profile gate, pick, before/after, modes, save |
+| `photos` | **Image correction** — profile gate, pick, before/after, modes, save/share, comparison |
 | `camera` / `lens` / `profile` / `settings` | Placeholders (Phase 1 remaining) |
 
 ### Photos screen recipe
 
 - **No profile:** pink `PastelCard` + “Go to Vision Test” (never show paths).
 - **Empty:** pink card + large “Choose a photo”.
-- **Viewer:** fitted photo, pinch/pan; Corrected mode shows left=original / right=corrected with draggable divider; floating dark mode pill; Severity preview bar; Save → “Saved to your gallery”.
-- Bottom padding = `nav_clearance` so content clears the floating nav.
+- **Viewer:** pinch/pan; Original = full image (no divider); Corrected/Simulation = before/after with corner labels + ≥44 dp handle at 50%.
+- **Strength:** defaults to test result; hint + “Reset to my result” when changed; Simulation helper: “Adjust the strength until it matches how you see it.”
+- **Actions:** Save/Share current mode; Export comparison (“Normal vision” / “How I see it”); confirmations without paths.
+- Bottom padding = `nav_clearance`.
 
 ### Test screen recipe
 

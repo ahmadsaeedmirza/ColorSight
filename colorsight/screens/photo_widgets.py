@@ -22,10 +22,13 @@ from kivy.uix.scatter import Scatter
 from kivy.uix.widget import Widget
 from kivy.uix.image import Image as KivyImage
 
-from colorsight.image_pipeline import before_after_split
+from colorsight.image_pipeline import before_after_split, divider_visible, right_label_for_mode
 from colorsight.theme.geometry import clamped_radii
 from colorsight.theme.tokens import Colors, Fonts, Icons, Radii
 from colorsight.widgets import Icon
+
+
+HANDLE_HIT_DP = 44
 
 
 def rgb_to_texture(rgb: np.ndarray, existing: Texture | None = None) -> Texture:
@@ -95,20 +98,29 @@ class LoadingShimmer(Widget):
 
 
 class PreviewSeverityBar(Widget):
-    """Preview-only severity control (not a Kivy Slider; does not persist profile)."""
+    """Preview-only strength control (not a Kivy Slider; does not persist profile)."""
 
     value = NumericProperty(0.5)
-    # Not named on_value — that would clash with Kivy's auto-handler for ``value``.
     change_cb = ObjectProperty(None, allownone=True)
 
     def __init__(self, value=0.5, **kwargs):
+        kwargs.pop("value", None)
         super().__init__(**kwargs)
         self.size_hint_y = None
         self.height = dp(44)
-        self.value = float(np.clip(value, 0.0, 1.0))
         self._dragging = False
         self.bind(pos=self._draw, size=self._draw, value=self._draw)
+        self.set_value(value, notify=False)
+
+    def set_value(self, value: float, *, notify: bool = True):
+        v = float(np.clip(value, 0.0, 1.0))
+        # Snap to percent steps so 0.91 → 91 on the label
+        v = round(v * 100.0) / 100.0
+        changed = abs(v - float(self.value)) > 1e-6
+        self.value = v
         self._draw()
+        if notify and changed:
+            _invoke(self.change_cb, v)
 
     def _knob_x(self):
         pad = dp(12)
@@ -147,9 +159,7 @@ class PreviewSeverityBar(Widget):
         pad = dp(12)
         usable = max(1.0, self.width - pad * 2)
         v = float(np.clip((x - self.x - pad) / usable, 0.0, 1.0))
-        if abs(v - self.value) > 1e-4:
-            self.value = v
-            _invoke(self.change_cb, v)
+        self.set_value(v, notify=True)
 
     def on_touch_down(self, touch):
         if not self.collide_point(*touch.pos):
@@ -171,6 +181,22 @@ class PreviewSeverityBar(Widget):
         touch.ungrab(self)
         self._dragging = False
         return True
+
+
+class TextLinkButton(ButtonBehavior, Label):
+    """Small text action (e.g. Reset) — not named after Kivy Button."""
+
+    def __init__(self, text="", **kwargs):
+        super().__init__(**kwargs)
+        self.text = text
+        self.font_name = Fonts.medium
+        self.font_size = dp(13)
+        self.color = Colors.accent_blue
+        self.halign = "left"
+        self.valign = "middle"
+        self.size_hint_y = None
+        self.height = dp(28)
+        self.bind(size=lambda *_: setattr(self, "text_size", self.size))
 
 
 class _ModeChip(ButtonBehavior, Label):
@@ -197,13 +223,28 @@ class _ModeChip(ButtonBehavior, Label):
         _invoke(self._on_tap, self.key)
 
 
+class _IconHit(ButtonBehavior, BoxLayout):
+    def __init__(self, icon_name: str, on_tap, **kwargs):
+        super().__init__(**kwargs)
+        self._on_tap = on_tap
+        self.size_hint = (None, 1)
+        self.width = dp(40)
+        self.padding = [dp(4), dp(4)]
+        self.add_widget(
+            Icon(icon=icon_name, icon_size=20, color=(1, 1, 1, 1), size_hint=(1, 1))
+        )
+
+    def on_release(self):
+        _invoke(self._on_tap)
+
+
 class PhotoModeToolbar(BoxLayout):
-    """Floating dark pill: Original | Corrected | Simulation + Save."""
+    """Floating dark pill: Original | Corrected | Simulation + Save + Share."""
 
     mode = StringProperty("corrected")
-    # Named mode_cb / save_cb — NOT on_mode / on_save (clash with Kivy on_<prop>).
     mode_cb = ObjectProperty(None, allownone=True)
     save_cb = ObjectProperty(None, allownone=True)
+    share_cb = ObjectProperty(None, allownone=True)
 
     def __init__(self, **kwargs):
         self._chips = {}
@@ -211,8 +252,8 @@ class PhotoModeToolbar(BoxLayout):
         self.orientation = "horizontal"
         self.size_hint_y = None
         self.height = dp(52)
-        self.padding = [dp(8), dp(6), dp(8), dp(6)]
-        self.spacing = dp(4)
+        self.padding = [dp(6), dp(6), dp(6), dp(6)]
+        self.spacing = dp(2)
         for key, label in (
             ("original", "Original"),
             ("corrected", "Corrected"),
@@ -222,27 +263,22 @@ class PhotoModeToolbar(BoxLayout):
             self._chips[key] = chip
             self.add_widget(chip)
 
-        class _SaveHit(ButtonBehavior, BoxLayout):
-            pass
-
-        hit = _SaveHit(size_hint=(None, 1), width=dp(44), padding=[dp(4), dp(4)])
-        hit.add_widget(
-            Icon(icon=Icons.save, icon_size=22, color=(1, 1, 1, 1), size_hint=(1, 1))
-        )
-        hit.bind(on_release=lambda *_: self._do_save())
-        self.add_widget(hit)
+        self.add_widget(_IconHit(Icons.save, self._do_save))
+        self.add_widget(_IconHit(Icons.share, self._do_share))
         self.bind(pos=self._draw, size=self._draw)
         self._sync_mode()
         self._draw()
 
     def on_mode(self, _instance, _value):
-        """Kivy auto-handler when ``mode`` changes — must be a real method, not None."""
         if self._chips:
             self._sync_mode()
         _invoke(self.mode_cb, self.mode)
 
     def _do_save(self):
         _invoke(self.save_cb)
+
+    def _do_share(self):
+        _invoke(self.share_cb)
 
     def _tap_mode(self, key: str):
         if self.mode != key:
@@ -275,7 +311,6 @@ class BeforeAfterViewer(FloatLayout):
     """Pinch-zoom / pan photo stage with optional before/after divider."""
 
     split = NumericProperty(0.5)
-    # Named split_cb — NOT on_split (would clash with Kivy auto-handler for ``split``).
     split_cb = ObjectProperty(None, allownone=True)
 
     def __init__(self, **kwargs):
@@ -298,23 +333,49 @@ class BeforeAfterViewer(FloatLayout):
         self._scatter.add_widget(self._photo)
         self.add_widget(self._scatter)
 
-        self._handle = Widget(size_hint=(None, None), size=(dp(36), dp(36)))
+        hit = dp(HANDLE_HIT_DP)
+        self._handle = Widget(size_hint=(None, None), size=(hit, hit))
         self._handle_icon = Icon(
             icon=Icons.drag_handle,
             icon_size=18,
             color=Colors.text_muted,
             size_hint=(None, None),
-            size=(dp(36), dp(36)),
+            size=(hit, hit),
         )
         self._handle.add_widget(self._handle_icon)
         self.add_widget(self._handle)
         self._handle.opacity = 0
 
+        self._left_lbl = Label(
+            text="Original",
+            font_name=Fonts.semibold,
+            font_size=dp(11),
+            color=(1, 1, 1, 0.95),
+            size_hint=(None, None),
+            size=(dp(72), dp(20)),
+            halign="left",
+            valign="middle",
+            opacity=0,
+        )
+        self._right_lbl = Label(
+            text="Corrected",
+            font_name=Fonts.semibold,
+            font_size=dp(11),
+            color=(1, 1, 1, 0.95),
+            size_hint=(None, None),
+            size=(dp(84), dp(20)),
+            halign="right",
+            valign="middle",
+            opacity=0,
+        )
+        for lbl in (self._left_lbl, self._right_lbl):
+            lbl.bind(size=lambda *_ , l=lbl: setattr(l, "text_size", l.size))
+            self.add_widget(lbl)
+
         self.bind(pos=self._layout, size=self._layout)
         Clock.schedule_once(lambda dt: self._layout(), 0)
 
     def on_split(self, _instance, _value):
-        """Kivy auto-handler when ``split`` changes."""
         self._refresh_display()
         self._place_handle()
         _invoke(self.split_cb, self.split)
@@ -323,8 +384,12 @@ class BeforeAfterViewer(FloatLayout):
         self._orig = original
         self._right = right
         self._mode = mode
-        self._handle.opacity = 1 if mode == "corrected" and original is not None and right is not None else 0
-        if mode != "corrected":
+        show = divider_visible(mode) and original is not None and right is not None
+        self._handle.opacity = 1 if show else 0
+        self._left_lbl.opacity = 1 if show else 0
+        self._right_lbl.opacity = 1 if show else 0
+        self._right_lbl.text = right_label_for_mode(mode) or "Corrected"
+        if not show:
             self.canvas.after.clear()
         self._refresh_display()
         self._layout()
@@ -334,6 +399,8 @@ class BeforeAfterViewer(FloatLayout):
         self._right = None
         self._photo.texture = None
         self._handle.opacity = 0
+        self._left_lbl.opacity = 0
+        self._right_lbl.opacity = 0
         self.canvas.after.clear()
 
     def _compose(self) -> np.ndarray | None:
@@ -341,9 +408,10 @@ class BeforeAfterViewer(FloatLayout):
             return None
         if self._mode == "original" or self._right is None:
             return self._orig
-        if self._mode == "simulation":
-            return self._right
-        return before_after_split(self._orig, self._right, self.split)
+        # Corrected + Simulation: left original, right processed
+        if divider_visible(self._mode):
+            return before_after_split(self._orig, self._right, self.split)
+        return self._right
 
     def _refresh_display(self):
         rgb = self._compose()
@@ -354,6 +422,12 @@ class BeforeAfterViewer(FloatLayout):
         h, w = rgb.shape[:2]
         self._photo.size = (w, h)
         self._scatter.size = (w, h)
+
+    def _image_rect(self):
+        sx, sy = self._scatter.pos
+        sw = self._photo.width * self._scatter.scale
+        sh = self._photo.height * self._scatter.scale
+        return sx, sy, sw, sh
 
     def _fit_scatter(self):
         if self._photo.texture is None or self.width <= 1 or self.height <= 1:
@@ -378,32 +452,36 @@ class BeforeAfterViewer(FloatLayout):
         if self._handle.opacity <= 0 or self._photo.texture is None:
             self.canvas.after.clear()
             return
-        sx, sy = self._scatter.pos
-        sw = self._photo.width * self._scatter.scale
-        sh = self._photo.height * self._scatter.scale
-        hx = sx + self.split * sw
+        sx, sy, sw, sh = self._image_rect()
+        # Keep handle center inside image bounds
+        hx = float(np.clip(sx + self.split * sw, sx, sx + sw))
         hy = sy + sh / 2
         self._handle.center = (hx, hy)
         self._handle_icon.pos = self._handle.pos
+        # Corner labels inside image
+        pad = dp(6)
+        self._left_lbl.pos = (sx + pad, sy + pad)
+        self._right_lbl.pos = (sx + sw - self._right_lbl.width - pad, sy + pad)
         self._draw_divider(sx, sy, sw, sh)
 
     def _draw_divider(self, sx, sy, sw, sh):
         self.canvas.after.clear()
         if self._handle.opacity <= 0:
             return
-        x = sx + self.split * sw
+        x = float(np.clip(sx + self.split * sw, sx, sx + sw))
+        r = dp(17)
         with self.canvas.after:
             Color(1, 1, 1, 0.85)
             Line(points=[x, sy, x, sy + sh], width=1.2)
             Color(*Colors.shadow)
             Ellipse(
-                pos=(self._handle.center_x - dp(18), self._handle.center_y - dp(18) - dp(1)),
-                size=(dp(36), dp(36)),
+                pos=(self._handle.center_x - r, self._handle.center_y - r - dp(1)),
+                size=(r * 2, r * 2),
             )
             Color(1, 1, 1, 1)
             Ellipse(
-                pos=(self._handle.center_x - dp(17), self._handle.center_y - dp(17)),
-                size=(dp(34), dp(34)),
+                pos=(self._handle.center_x - r + dp(1), self._handle.center_y - r + dp(1)),
+                size=((r - dp(1)) * 2, (r - dp(1)) * 2),
             )
 
     def on_touch_down(self, touch):
@@ -415,9 +493,8 @@ class BeforeAfterViewer(FloatLayout):
 
     def on_touch_move(self, touch):
         if touch.grab_current is self and self._dragging_handle:
-            sw = max(1.0, self._photo.width * self._scatter.scale)
-            sx = self._scatter.x
-            self.split = float(np.clip((touch.x - sx) / sw, 0.02, 0.98))
+            sx, _sy, sw, _sh = self._image_rect()
+            self.split = float(np.clip((touch.x - sx) / max(1.0, sw), 0.02, 0.98))
             return True
         return super().on_touch_move(touch)
 

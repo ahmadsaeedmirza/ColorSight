@@ -48,16 +48,30 @@ python -m unittest tests.test_image_pipeline -v
 # Headless pipeline smoke (correct + save to Pictures/ColorSight)
 python tools/flow_photos.py          # → FLOW_PHOTOS_OK …
 
-# Desktop UI smoke (no-profile → pick → tap every mode + severity + split → save)
-python tools/smoke_photos_ui.py      # → SMOKE_PHOTOS_OK … toolbar_modes_ok …
+# Photos helpers (strength, divider, MAD, comparison, mode save)
+python -m unittest tests.test_photos_pipeline -v
+
+# Desktop UI smoke (strength default/reset, modes, divider, save×3, comparison, share)
+python tools/smoke_photos_ui.py      # → SMOKE_PHOTOS_OK … profile_strength_ok …
 ```
 
 If mode taps crash with `NoneType is not callable`, check that Photos widgets do not use `on_mode` / `on_split` as `ObjectProperty` names (see `rules.md`).
 
+- Preview longest side ≈ **1080 px**; full-res only on Save/Share (JPEG quality 95).
+- Strength is a **temporary preview override** — does not rewrite `correction_profile.json`.
+- UI never shows filesystem paths (pick/save/share confirmations are friendly copy only).
 
-- Preview longest side ≈ **1080 px**; full-res only on Save (JPEG quality 95).
-- Severity on Photos is a **temporary preview override** — does not rewrite `correction_profile.json`.
-- UI never shows filesystem paths (pick/save confirmations are friendly copy only).
+### Android share (FileProvider)
+
+Share uses `Intent.ACTION_SEND` + `FileProvider` URI (`photo_io._share_android`). Packaging needs:
+
+| Piece | Location |
+|-------|----------|
+| Paths XML | `assets/android/file_paths.xml` → `@xml/file_paths` (`android.add_resources` in `buildozer.spec`) |
+| Manifest `<provider>` | Merge `assets/android/fileprovider_snippet.xml` into `<application>` (authority `${applicationId}.fileprovider`) |
+| Maven | `androidx.core:core` (listed in `buildozer.spec`) |
+
+Desktop Share falls back to saving into `Pictures/ColorSight/` and showing “Saved to your gallery”.
 
 ## Android packaging (Buildozer)
 

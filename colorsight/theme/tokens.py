@@ -82,6 +82,8 @@ class Icons:
     arrow_upward = "arrow_upward"
     arrow_downward = "arrow_downward"
     save = "save"
+    share = "share"
+    compare = "compare"
     drag_handle = "drag_handle"
     add_photo = "add_photo_alternate"
     tune = "tune"

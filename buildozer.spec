@@ -21,6 +21,10 @@ android.accept_sdk_license = True
 
 android.permissions = CAMERA,READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE,READ_MEDIA_IMAGES
 
+# FileProvider paths for share sheet (see assets/android/ + production.md)
+android.add_maven_dependency = androidx.core:core:1.12.0
+android.add_resources = %(source.dir)s/assets/android/file_paths.xml:xml/file_paths.xml
+
 android.archs = arm64-v8a,armeabi-v7a
 android.allow_backup = True
 

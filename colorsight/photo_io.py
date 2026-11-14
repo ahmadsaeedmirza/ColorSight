@@ -193,21 +193,82 @@ def save_corrected_image(
 
     Desktop → Pictures/ColorSight/. Android → MediaStore album ColorSight.
     """
-    from colorsight.image_pipeline import encode_image
+    _save_image_bytes(rgb, preferred_name=preferred_name, fmt=fmt)
+    return "Saved to your gallery"
 
+
+def _normalize_filename(preferred_name: str | None, fmt: str) -> str:
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     name = preferred_name or f"ColorSight_{stamp}"
     if not name.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
         name = f"{name}.{'png' if fmt == 'png' else 'jpg'}"
+    return name
 
+
+def _save_image_bytes(rgb, *, preferred_name: str | None = None, fmt: str = "jpg") -> Path:
+    """Write image; returns local Path (for share) — never show path in UI."""
+    from colorsight.image_pipeline import encode_image
+
+    name = _normalize_filename(preferred_name, fmt)
     if is_android():
-        return _save_android_mediastore(rgb, name)
+        # Also publish to MediaStore; keep a cache file for FileProvider share
+        _save_android_mediastore(rgb, name)
+        cache = Path(tempfile.gettempdir()) / "ColorSightShare"
+        cache.mkdir(parents=True, exist_ok=True)
+        return encode_image(rgb, cache / name, quality=95)
 
     out_dir = pictures_dir() / "ColorSight"
     out_dir.mkdir(parents=True, exist_ok=True)
-    path = encode_image(rgb, out_dir / name, quality=95)
-    # Friendly confirmation only — caller must not show path
-    return "Saved to your gallery"
+    return encode_image(rgb, out_dir / name, quality=95)
+
+
+def share_image(
+    rgb,
+    *,
+    preferred_name: str | None = None,
+    fmt: str = "jpg",
+    on_done: Callable[[str], None] | None = None,
+) -> str:
+    """Share via Android ACTION_SEND + FileProvider, or desktop save + confirm.
+
+    Returns friendly status copy (never a filesystem path).
+    """
+    path = _save_image_bytes(rgb, preferred_name=preferred_name, fmt=fmt)
+    if is_android():
+        try:
+            _share_android(path)
+            msg = "Share sheet opened"
+        except Exception:
+            msg = "Saved to your gallery"
+    else:
+        msg = "Saved to your gallery"
+    if callable(on_done):
+        on_done(msg)
+    return msg
+
+
+def _share_android(path: Path) -> None:
+    """Intent.ACTION_SEND with FileProvider URI (requires FileProvider in the APK)."""
+    from android import mActivity  # type: ignore
+    from jnius import autoclass, cast  # type: ignore
+
+    Intent = autoclass("android.content.Intent")
+    File = autoclass("java.io.File")
+    # Prefer AndroidX FileProvider; fall back to support library
+    try:
+        FileProvider = autoclass("androidx.core.content.FileProvider")
+    except Exception:
+        FileProvider = autoclass("android.support.v4.content.FileProvider")
+
+    authority = mActivity.getPackageName() + ".fileprovider"
+    jfile = File(str(path))
+    uri = FileProvider.getUriForFile(mActivity, authority, jfile)
+    intent = Intent(Intent.ACTION_SEND)
+    intent.setType("image/jpeg" if path.suffix.lower() in (".jpg", ".jpeg") else "image/png")
+    intent.putExtra(Intent.EXTRA_STREAM, uri)
+    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    chooser = Intent.createChooser(intent, "Share with ColorSight")
+    mActivity.startActivity(chooser)
 
 
 def _save_android_mediastore(rgb, filename: str) -> str:

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FileProvider paths for ColorSight share (ACTION_SEND). -->
+<paths>
+    <cache-path name="share_cache" path="ColorSightShare/" />
+    <external-cache-path name="share_ext_cache" path="ColorSightShare/" />
+    <files-path name="share_files" path="ColorSightShare/" />
+</paths>
