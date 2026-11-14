@@ -116,7 +116,7 @@ class HomeScreen(Screen):
         content.add_widget(chips)
 
         features = [
-            ("Vision Test", "Ishihara-style check", "yellow", "test", 150),
+            ("Vision Test", "Trivector color check", "yellow", "test", 150),
             ("Photos", "Fix gallery colors", "pink", "photos", 150),
             ("Camera", "Live correction", "sky", "camera", 170),
             ("Lens", "Name that color", "mint", "lens", 170),

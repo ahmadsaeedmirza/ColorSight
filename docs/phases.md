@@ -14,10 +14,11 @@
 |-------|--------|
 | `/core` Machado simulation + daltonization + `CorrectionProfile` + `name_color` | Done |
 | Unit tests for engine | Done |
-| **Vision Test UI** — procedural plates, numpad, hue arrange, scoring, results, save profile | Done |
+| **Vision Test UI** — Trivector CCT (Landolt C) + hue arrange + results + save profile | Done |
 | Test crash fix — `PillProgressBar` rename (no Kivy builtin name collision) | Done |
-| Plate generator audit — dense packing, bold Lexend masks, confusion palettes, validation tests, preview tool, inconclusive scoring | Done |
-| Shape legibility — open counters (less dilate / smaller dots), recognizability tests, contact sheet + figure-only previews | Done |
+| Plate generator (legacy) — dense packing, confusion palettes, validation + recognizability tests | Done (kept, not in live flow) |
+| Shape legibility — open counters, recognizability tests, contact sheet | Done |
+| Trivector core — u'v' axes, staircase, model-observer calibration, accuracy tests | Done |
 | UI polish — result swatches, friendly save copy, nav slots + centered FAB | Done |
 
 ### Remaining in-app features

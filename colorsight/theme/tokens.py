@@ -79,3 +79,5 @@ class Icons:
     add = "add"
     arrow_forward = "arrow_forward"
     arrow_back = "arrow_back"
+    arrow_upward = "arrow_upward"
+    arrow_downward = "arrow_downward"

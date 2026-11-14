@@ -301,6 +301,16 @@ def _radius_band_for_stroke(stroke_px: float, size: int) -> tuple[float, float]:
     return r_min, r_max
 
 
+def pack_circles_dense(
+    size: int,
+    rng: np.random.Generator,
+    r_min: float | None = None,
+    r_max: float | None = None,
+) -> list[tuple[float, float, float]]:
+    """Public dense circle packer (used by plates + trivector Landolt fields)."""
+    return _pack_circles_dense(size, rng, r_min=r_min, r_max=r_max)
+
+
 def _pack_circles_dense(
     size: int,
     rng: np.random.Generator,

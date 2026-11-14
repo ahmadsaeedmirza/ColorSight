@@ -4,6 +4,40 @@ Newest entries first. Append after every prompt per `rules.md`.
 
 ---
 
+## 2026-11-14 — Replace plates with CCT Trivector
+
+**Prompt:** Swap live Vision Test to Cambridge Colour Test (Trivector) for type + severity; keep `plates.py` + tests as legacy; keep hue step; model-observer calibration + accuracy tests; checklist/results UI; no engine math changes.
+
+**Core:** New `core/trivector.py` — CIE u'v' D65 background, protan/deutan/tritan copunctals, Landolt C dot stimuli (`pack_circles_dense`), interleaved 4-AFC staircases (phone 8 / full 11 reversals), classification cutoffs, Machado model-observer calibration → severity curves. `CorrectionProfile` from `TrivectorResult.to_profile()`.
+
+**UI:** Checklist → trials (arrows + can't see, 6 s timeout, ~190 dp C) → hue → results (severity label/bar, axis bars, disclaimer, save). Home card: “Trivector color check”.
+
+**Tests:** `tests/test_trivector.py` (11). Full suite **45 OK**. `tools/flow_trivector.py` → `FLOW_OK`.
+
+### Confusion matrix (true type × severity → estimated)
+
+| true | sev | est type | est sev |
+|------|-----|----------|---------|
+| protanopia | 0.0 | normal | 0.00 |
+| protanopia | 0.3 | protanopia | 0.30 |
+| protanopia | 0.5 | protanopia | 0.50 |
+| protanopia | 0.7 | protanopia | 0.70 |
+| protanopia | 1.0 | protanopia | 1.00 |
+| deuteranopia | 0.0 | normal | 0.00 |
+| deuteranopia | 0.3 | deuteranopia | 0.30 |
+| deuteranopia | 0.5 | deuteranopia | 0.50 |
+| deuteranopia | 0.7 | deuteranopia | 0.70 |
+| deuteranopia | 1.0 | deuteranopia | 1.00 |
+| tritanopia | 0.0 | normal | 0.00 |
+| tritanopia | 0.3 | tritanopia | 0.30 |
+| tritanopia | 0.5 | tritanopia | 0.50 |
+| tritanopia | 0.7 | tritanopia | 0.70 |
+| tritanopia | 1.0 | tritanopia | 1.00 |
+
+(Machado-calibrated threshold patterns; matching axis from calibration knots.)
+
+---
+
 ## 2026-11-14 — Shape legibility only (counters / dots / recognizability)
 
 **Prompt:** Fix over-dilated digit masks (3/9 blobs); smaller dots, open counters; add color-independent recognizability tests; contact sheet + figure-only previews; re-run tests; report per-plate pass/fail under normal/protan/deutan/tritan; update docs. Do **not** change confusion palettes or existing ΔE validation gates.

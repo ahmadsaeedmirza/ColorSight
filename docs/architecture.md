@@ -6,7 +6,7 @@
 |--------|------|-----|
 | **Python 3** | App language | Course/project fit; NumPy/OpenCV ecosystem |
 | **Kivy** | UI | Desktop + Android via Buildozer; custom pastel UI |
-| **NumPy / OpenCV / Pillow** | Color + plates | Vectorized CVD math; Lab/HSV; Lexend digit masks |
+| **NumPy / OpenCV / Pillow** | Color + stimuli | CVD math; CIE u'v'; Landolt C / legacy plates |
 | **Buildozer** | Android packaging | Kivy → APK |
 
 ## Folder structure
@@ -14,84 +14,74 @@
 ```
 ColorSight/
 ├── core/
-│   ├── plates.py      # Procedural plates + metadata + metrics
-│   ├── scoring.py     # expected-answer classification (+ inconclusive)
+│   ├── trivector.py   # LIVE Vision Test — CCT Trivector (u'v' staircases)
+│   ├── plates.py      # LEGACY Ishihara-style plates (kept + tested, not in UI flow)
+│   ├── scoring.py     # Legacy plate scoring + hue_arrangement_error
 │   ├── machado.py / engine.py / profile.py / naming.py
-├── tests/             # Engine + plate validation + respondent sims
-├── tools/preview_plates.py  # debug/plates views + contact_sheet + figure_only
+├── tests/             # Engine + trivector + legacy plate gates
+├── tools/             # preview_plates.py, flow_trivector.py
 ├── debug/             # gitignored preview output
-└── colorsight/        # Kivy UI (test_screen, FloatingNavBar, …)
+└── colorsight/        # Kivy UI (test_screen Trivector flow, …)
 ```
 
+## Live Vision Test — Cambridge Colour Test Trivector (`core/trivector.py`)
 
-## Vision-test plates (`core/plates.py`)
+Measures **type and severity** with interleaved 4-AFC staircases on three confusion axes in CIE 1976 **u'v'**.
 
-**Original procedural artwork** — not copyrighted Ishihara images.
+### Color space
 
-Pipeline per plate:
+| Symbol | Value |
+|--------|-------|
+| Background (D65) | u'≈0.1978, v'≈0.4683, Y=0.45 |
+| Protan copunctal | (0.6579, 0.5013) |
+| Deutan copunctal | (−1.2174, 0.7826) |
+| Tritan copunctal | (0.2573, 0.0) |
 
-1. **Bold digit mask** — Lexend-SemiBold (Bold fallback) at ~60% of plate diameter, **no dilate**; light erode so counters of 3/6/8/9 stay open. Stroke targets ~3–4 average-dot diameters.
-2. **Dense hex packing** — small radii capped vs stroke (~stroke/7), light air gap (no heavy overlap/blobbing).
-3. **Figure vs ground** — centers tested against an **inset** copy of the ink mask so painted disks cannot spill into counters; `RenderedPlate.mask` stores the full ink for metrics.
-4. **Confusion-line palettes** — equiluminant figure/ground bases (ΔL* < 3) with high normal ΔE; under the matching Machado simulation @ severity 1.0, ΔE ≤ 6 on hidden/classify/tritan plates. Small a*/b* jitter only (no brightness cue). Palettes/ΔE gates are independent of shape tuning.
+Target chromaticity = background moved toward the axis copunctal by distance **d** (Δu'v'). Convert u'v'+Y → XYZ → linear sRGB → gamma sRGB. **d** is clamped to the max in-gamut distance per axis (`max_in_gamut_d`).
 
-### Battery metadata (`DEFAULT_BATTERY`, 14 plates)
+### Stimulus
 
-| Role | Count | Expected answers |
-|------|-------|------------------|
-| Control | 1 | Everyone sees the digit |
-| Hidden RG | 6 | Normal (+ tritan) see digit; protan & deutan → can't see |
-| Classify protan | 2 | Normal/deutan/tritan see; protan → can't see |
-| Classify deutan | 3 | Normal/protan/tritan see; deutan → can't see |
-| Tritan | 2 | Normal/protan/deutan see; tritan → can't see |
+- Dot field via `pack_circles_dense` (shared with plates).
+- **Landolt C** of target chromaticity; gap ≈ 1/5 of outer diameter; orientation ∈ {up, down, left, right}.
+- Display size ≈ **190 dp** (~30 mm).
+- Per-dot luminance jitter from the **same** distribution for target and background (no luminance cue).
 
-Each `PlateSpec` stores `expected_normal / expected_protan / expected_deutan / expected_tritan` (`None` = "can't see").
+### Staircase (published CCT style)
 
-`RenderedPlate` carries `image`, `mask`, and `dots` for validation and UI.
+- 4-AFC; **step doubles after error**, **halves after correct**; “can't see” = error.
+- Three axes **interleaved** (random open axis each trial).
+- Modes: **phone** — 8 reversals / mean of last 4; **full** — 11 / last 6.
+- ~24–40 trials on phone mode.
 
-### Automated plate gates
+### Classification
 
-**Color / geometry** (`tests/test_plate_validation.py`) — every plate, fail with plate id:
+Normal cutoffs (Δu'v'): protan ≤ 0.0100, deutan ≤ 0.0100, tritan ≤ 0.0150 (plus clear lift vs calibrated normal baseline).
 
-| Gate | Threshold |
-|------|-----------|
-| Figure dot count | ≥ 40 |
-| Stroke width | ≥ 3 average-dot diameters |
-| Normal mean Lab ΔE (figure vs ground) | ≥ 20 |
-| Matching CVD ΔE @ severity 1.0 (hidden/classify/tritan) | ≤ 6 |
-| Mean ΔL* | < 3 |
-| IoU (gap-filled figure dots vs digit mask) | ≥ 0.7 |
+| Pattern | Result |
+|---------|--------|
+| No elevated axes | `normal` |
+| Only / dominant tritan | `tritanopia` |
+| Elevated protan or deutan | RG type by relative elevation (near-tie → `inconclusive`) |
 
-**Shape recognizability** (`tests/test_plate_recognizability.py`) — color-independent:
+Severity 0–1 from elevated-axis threshold via monotone **calibration curves** (Machado model observer). Hue-arrangement error **nudges** severity up lightly (does not dilute trivector). Labels: none / mild / moderate / strong.
 
-| Gate | Rule |
-|------|------|
-| Template match | Rasterize figure dots → binary; best IoU/corr vs clean Lexend 0–9 equals `expected_normal` |
-| Margin | Best score − runner-up ≥ `RECOG_MARGIN` (0.08) |
-| Topology | Hole count via `cv2.findContours` hierarchy matches digit (8→2, 6/9/0/4→1, 3/7/…→0) |
+`TrivectorResult.to_profile()` → `CorrectionProfile` (engine math unchanged).
 
-Preview: `python tools/preview_plates.py` → per-view PNGs, `{id}_figure_only.png`, and `debug/plates/contact_sheet.png` (gitignored).
+### Model-observer calibration (`build_calibration`)
 
-## Scoring (`core/scoring.py`)
+Observer sees mean target vs background through `apply_simulation` (Machado). Answers correctly when simulated Δu'v' > JND (with light noise). Binary-search thr(severity) per axis → install knots. Tests in `tests/test_trivector.py` cover gamut, luminance match, staircase convergence, type/severity accuracy (±0.15), monotonicity, mild cases.
 
-Match each response against the per-viewer expected table (`None` ↔ "can't see").
+## Legacy plates (`core/plates.py`) — not in UI flow
 
-**Thresholds:**
+Procedural Ishihara-style battery kept for regression (`tests/test_plate_*`, `tests/test_plates_scoring.py`). Live Test screen no longer calls `generate_battery`.
 
-| Constant | Value | Meaning |
-|----------|-------|---------|
-| `MATCH_RATE_CLEAR` | 0.75 | Winning type must match ≥ this fraction |
-| `LEAD_MARGIN` | 0.12 | Must beat #2 by this margin |
-| `NORMAL_MIN_MATCH` | 0.85 | Normal needs a high match rate |
-| `CONTROL_FAIL_INCONCLUSIVE` | 0.5 | Failing control → often inconclusive |
+## Scoring helpers
 
-Outcomes: `normal` | `protanopia` | `deuteranopia` | `tritanopia` | **`inconclusive`**.
+- **Live:** `score_trivector(session, hue_order=…)` in `trivector.py`.
+- **Legacy:** `score_screening` / `simulate_respondent` in `scoring.py` (plate expected-answer tables).
+- Shared: `hue_arrangement_error`.
 
-Severity blends miss-vs-normal rate with hue-arrangement error. Screening only — not a medical diagnosis.
-
-Respondent unit tests: `simulate_respondent(type)` → `score_screening` asserts the matching class.
-
-## Color math (CVD engine)
+## Color math (CVD engine) — unchanged
 
 Simulation: \(\mathbf{rgb}_{sim} = S(\textit{type}, s)\,\mathbf{rgb}\) (Machado 2009).  
 Daltonization: \(C = I + E(I - S)\).  
@@ -99,7 +89,7 @@ Naming: Lab nearest swatch + HSV neutrals.
 
 ## UI notes
 
-- Test flow: intro → 14 plates → hue arrange → results (disclaimer + save).
-- Save copy: “Your color profile has been saved” (path only in logs).
-- `FloatingNavBar`: five identical icon+label slots; blue `+` FAB centered on Camera, clamped inside the pill.
-- Never name custom widgets after built-in Kivy widgets (`PillProgressBar`, not `ProgressBar`).
+- Test flow: **checklist → Trivector trials (arrows + can't see, 6 s timeout) → hue arrange → results**.
+- Results: type, severity label + 0–100 bar, per-axis pastel bars, before/after swatches, disclaimer, Save (friendly copy only).
+- `FloatingNavBar`: five identical slots; blue `+` FAB clamped inside pill.
+- Never name custom widgets after built-in Kivy widgets (`PillProgressBar`, `ArrowPad`, …).

@@ -125,8 +125,10 @@ Apply the **same** clamped value to fill **and** matching shadow layers. Used by
 | `PillSearchBar` | Capsule search with Material `search` icon |
 | `FloatingNavBar` | Dark pill, equal slots, labels for all items, raised blue `add` FAB; fits width with side margins |
 | `PrimaryButton` / `RoundIconButton` | Filled CTA / circular icon button |
-| `PillProgressBar` (test) | Thin capsule progress for plate flow (**not** named `ProgressBar` — avoids Kivy builtin clash) |
-| `Numpad` (test) | Large digit pad + Can't see anything |
+| `PillProgressBar` (test) | Thin capsule progress (**not** named `ProgressBar` — avoids Kivy builtin clash) |
+| `ArrowPad` (test) | Large up/down/left/right + “I can't see it” for Landolt C |
+| `AxisBars` / `SeverityBar` (test) | Pastel per-axis thresholds + 0–100 severity capsule |
+| `Numpad` (test) | Legacy digit pad (plates flow retired from UI) |
 | `HueStrip` (test) | Tap-to-swap hue tiles for arrangement step |
 
 ## Screen list
@@ -135,16 +137,15 @@ Apply the **same** clamped value to fill **and** matching shadow layers. Used by
 |-----------|---------|
 | `welcome` | Big title, subtitle, dark arrow CTA, stacked pastel feature cards |
 | `home` | Header (menu + avatar), chips, pastel feature grid |
-| `test` | **Vision test** — intro → 14 plates → hue arrange → results (Save profile) |
+| `test` | **Vision test** — checklist → Trivector Landolt C → hue arrange → results (Save profile) |
 | `photos` / `camera` / `lens` / `profile` / `settings` | Placeholders (Phase 1 remaining) |
 
 ### Test screen recipe
 
-- Pastel intro cards (yellow / mint) with screening disclaimer  
-- One plate image per step + Lexend prompts + dark/light numpad keys  
-- Progress capsule under “Plate N of 14”  
-- Results: peach/mint/lavender result card, yellow medical disclaimer card, before/after demo strip (bands fill row width with no black edge), blue **Save my profile** CTA  
-- After save: show **“Your color profile has been saved”** (never show file paths in the UI)
+- **Checklist** (yellow/mint): brightness high, no night mode / blue-light / dark tint, ~40 cm, room light, usual glasses  
+- **Trivector**: Landolt C dot field (~190 dp), four arrow buttons + “I can't see it”, capsule progress, ~6 s timeout per trial  
+- **Hue arrange** then **results**: type, severity label (none/mild/moderate/strong) + 0–100 bar, pastel protan/deutan/tritan bars, yellow medical disclaimer, before/after demo, blue **Save my profile**  
+- After save: **“Your color profile has been saved”** (never show file paths in the UI)
 
 ### Floating nav
 

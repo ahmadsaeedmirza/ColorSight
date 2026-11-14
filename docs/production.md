@@ -27,14 +27,15 @@ Requires NumPy + OpenCV (`opencv-python` or `opencv-python-headless`).
 
 ### Vision Test notes (desktop)
 
-- First **Start test** generates 14 procedural plates (~1–3 s); UI shows “Preparing plates…”.
+- Live flow: **checklist → Trivector CCT → hue → results** (`colorsight/screens/test_screen.py`).
+- First **Start test** builds a `TrivectorSession` (phone mode: 8 reversals/axis); UI shows “Preparing trials…”.
+- Headless smoke: `python tools/flow_trivector.py` → prints `FLOW_OK …`.
 - Saved profile path (logs/docs only): Kivy `user_data_dir` / `correction_profile.json` — UI shows a friendly confirmation, not the path.
-- Plate artwork is original/procedural — do not replace with copyrighted Ishihara scans.
 - Progress UI widget is `PillProgressBar` (not Kivy’s `ProgressBar`).
-- Plate quality gates: `python -m unittest tests.test_plate_validation -v`
-- Shape recognizability: `python -m unittest tests.test_plate_recognizability -v`
+- Trivector gates: `python -m unittest tests.test_trivector -v`
+- Legacy plate gates (still required): `python -m unittest tests.test_plate_validation tests.test_plate_recognizability -v`
 - Full suite: `python -m unittest discover -s tests`
-- Preview PNGs: `python tools/preview_plates.py` → `debug/plates/` (per-plate normal/CVD views, `*_figure_only.png`, `contact_sheet.png`; gitignored).
+- Legacy plate previews: `python tools/preview_plates.py` → `debug/plates/` (gitignored).
 
 ## Android packaging (Buildozer)
 
@@ -118,7 +119,7 @@ Must ship with the APK:
 - [ ] Selected chips show white text on dark pills
 - [ ] Home / placeholder content scrolls clear of the nav bar
 - [ ] Orientation / safe areas look acceptable on the target phone
-- [ ] Vision Test completes (plates → hue → results) and Save profile writes JSON
+- [ ] Vision Test completes (checklist → Trivector → hue → results) and Save profile writes JSON
 - [ ] Result disclaimer visible (screening ≠ diagnosis; screens vary)
 - [ ] (Phase 1) Camera permission prompt and preview
 - [ ] (Phase 1) Gallery pick + corrected image display

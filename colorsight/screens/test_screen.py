@@ -1,6 +1,8 @@
-"""Color vision screening test — intro → plates → hue arrange → results."""
+"""Color vision screening — checklist → Trivector CCT → hue arrange → results."""
 
 from __future__ import annotations
+
+import logging
 
 import numpy as np
 from kivy.app import App
@@ -14,44 +16,60 @@ from kivy.uix.scrollview import ScrollView
 from kivy.uix.widget import Widget
 
 from core import (
-    DEFAULT_BATTERY,
+    NORMAL_CUTOFF,
+    TrivectorSession,
     apply_simulation,
-    generate_battery,
     hue_tile_colors,
-    make_answers,
-    score_screening,
+    score_trivector,
+    severity_label,
 )
-from colorsight.storage import profile_path
 from colorsight.theme.tokens import Colors, Fonts, Icons, Spacing
 from colorsight.widgets import PastelCard, PrimaryButton, RoundIconButton
-from colorsight.screens.test_widgets import HueStrip, Numpad, PillProgressBar, numpy_to_texture
+from colorsight.screens.test_widgets import (
+    ArrowPad,
+    AxisBars,
+    HueStrip,
+    PillProgressBar,
+    SeverityBar,
+    numpy_to_texture,
+)
+
+log = logging.getLogger("colorsight")
+
+TRIAL_TIMEOUT_S = 6.0
+STIM_SIZE = 256
+DISPLAY_DP = 190  # ~30 mm Landolt C at phone DPI
 
 
 class TestScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(name="test", **kwargs)
         self._phase = "intro"
-        self._battery = []
-        self._index = 0
-        self._responses: list = []
-        self._answer_buf = ""
-        self._hue_strip = None
+        self._session: TrivectorSession | None = None
+        self._trial = None
         self._result = None
-        self._plate_image = None
-        self._answer_label = None
+        self._hue_strip = None
+        self._stim_image = None
         self._progress = None
+        self._timeout_ev = None
+        self._mode = "phone"
         self._body = BoxLayout(orientation="vertical")
         self.add_widget(self._body)
         self.bind(on_pre_enter=self._on_enter)
-        self._show_intro()
+        self._show_checklist()
 
     def _on_enter(self, *_a):
-        # Reset to intro each time user opens Test (unless mid-flow — keep mid-flow)
-        if self._phase in ("intro", "results"):
-            self._show_intro()
+        if self._phase in ("intro", "checklist", "results"):
+            self._show_checklist()
 
     def _clear(self):
+        self._cancel_timeout()
         self._body.clear_widgets()
+
+    def _cancel_timeout(self):
+        if self._timeout_ev is not None:
+            self._timeout_ev.cancel()
+            self._timeout_ev = None
 
     def _header(self, title: str, show_back=True):
         row = BoxLayout(orientation="horizontal", size_hint_y=None, height=dp(44))
@@ -74,7 +92,8 @@ class TestScreen(Screen):
         return row
 
     def _go_home(self, *_a):
-        self._phase = "intro"
+        self._phase = "checklist"
+        self._cancel_timeout()
         if self.manager:
             self.manager.current = "home"
 
@@ -97,74 +116,81 @@ class TestScreen(Screen):
         scroll.add_widget(content)
         return scroll
 
-    # ── Intro ──────────────────────────────────────────────────────────
-    def _show_intro(self):
-        self._phase = "intro"
+    # ── Pre-test checklist ─────────────────────────────────────────────
+    def _show_checklist(self):
+        self._phase = "checklist"
         self._clear()
         card = PastelCard(
-            title="About this screening",
+            title="Before you start",
             subtitle=(
-                "You'll see 14 original color plates (not medical Ishihara prints), "
-                "then sort a short rainbow. Results estimate a correction profile — "
-                "not a clinical diagnosis. Screen colors vary by phone."
+                "Set brightness high. Turn off night mode, blue-light filters, "
+                "and dark-mode color tints. Hold the phone about 40 cm away in "
+                "normal room light. Wear your usual glasses."
             ),
             palette="yellow",
             size_hint_y=None,
-            height=dp(170),
+            height=dp(180),
             interactive=False,
         )
-        tips = PastelCard(
-            title="Tips",
-            subtitle="Sit in normal room light. Hold the phone ~40 cm away. Answer what you see — guessing is OK.",
+        about = PastelCard(
+            title="Cambridge-style Trivector",
+            subtitle=(
+                "You'll judge the gap in a Landolt C on three color axes "
+                "(~24–40 trials). Then a short hue sort. Screening only — "
+                "not a medical diagnosis. Screen colors vary by phone."
+            ),
             palette="mint",
             size_hint_y=None,
-            height=dp(120),
+            height=dp(160),
             interactive=False,
         )
         start = PrimaryButton(text="Start test")
         start.bg_color = Colors.accent_blue
-        start.on_press_cb = lambda *_: self._start_test()
+        start.on_press_cb = lambda *_: self._start_trivector()
         self._body.add_widget(
             self._padded_scroll(
                 self._header("Vision Test"),
                 card,
-                tips,
+                about,
                 start,
             )
         )
 
-    def _start_test(self):
-        # Generate plates (may take a moment) — defer one frame for UI
+    def _start_trivector(self):
         self._clear()
         wait = Label(
-            text="Preparing plates…",
+            text="Preparing trials…",
             font_name=Fonts.medium,
             font_size=dp(16),
             color=Colors.text_muted,
         )
         self._body.add_widget(wait)
-        Clock.schedule_once(lambda dt: self._begin_plates(), 0.05)
+        Clock.schedule_once(lambda dt: self._begin_trivector(), 0.05)
 
-    def _begin_plates(self):
-        self._battery = generate_battery(DEFAULT_BATTERY, size=360, seed=42)
-        self._index = 0
-        self._responses = []
-        self._answer_buf = ""
-        self._show_plate()
+    def _begin_trivector(self):
+        self._session = TrivectorSession(mode=self._mode, seed=42)
+        self._result = None
+        self._show_trial()
 
-    # ── Plates ─────────────────────────────────────────────────────────
-    def _show_plate(self):
-        self._phase = "plate"
+    # ── Trivector trials ───────────────────────────────────────────────
+    def _show_trial(self):
+        self._phase = "trivector"
         self._clear()
-        self._answer_buf = ""
-        total = len(self._battery)
-        rendered = self._battery[self._index]
-        spec, img = rendered.spec, rendered.image
+        assert self._session is not None
+        if self._session.finished:
+            self._show_hue()
+            return
 
-        progress = PillProgressBar(progress=(self._index) / total)
+        trial = self._session.next_trial(size=STIM_SIZE)
+        if trial is None:
+            self._show_hue()
+            return
+        self._trial = trial
+
+        progress = PillProgressBar(progress=self._session.progress)
         self._progress = progress
         step = Label(
-            text=f"Plate {self._index + 1} of {total}",
+            text=f"Trial  ·  {trial.axis} axis",
             font_name=Fonts.semibold,
             font_size=dp(14),
             color=Colors.text_muted,
@@ -174,12 +200,12 @@ class TestScreen(Screen):
         )
         step.bind(size=lambda *_: setattr(step, "text_size", step.size))
 
-        plate_img = Image(size_hint_y=None, height=dp(260), fit_mode="contain")
-        plate_img.texture = numpy_to_texture(img)
-        self._plate_image = plate_img
+        stim_img = Image(size_hint_y=None, height=dp(DISPLAY_DP), fit_mode="contain")
+        stim_img.texture = numpy_to_texture(trial.stimulus.image)
+        self._stim_image = stim_img
 
         prompt = Label(
-            text="What number do you see?",
+            text="Which way does the gap open?",
             font_name=Fonts.bold,
             font_size=dp(18),
             color=Colors.text,
@@ -189,60 +215,37 @@ class TestScreen(Screen):
         )
         prompt.bind(size=lambda *_: setattr(prompt, "text_size", prompt.size))
 
-        self._answer_label = Label(
-            text="—",
-            font_name=Fonts.bold,
-            font_size=dp(28),
-            color=Colors.text,
-            size_hint_y=None,
-            height=dp(36),
-        )
-
-        pad = Numpad(
-            on_digit=self._on_digit,
-            on_clear=self._on_clear,
-            on_cant_see=self._on_cant_see,
-            on_submit=self._on_submit_answer,
-        )
+        pad = ArrowPad(on_orient=self._on_orient, on_cant_see=self._on_cant_see)
 
         self._body.add_widget(
             self._padded_scroll(
                 self._header("Vision Test"),
                 step,
                 progress,
-                plate_img,
+                stim_img,
                 prompt,
-                self._answer_label,
                 pad,
             )
         )
+        self._timeout_ev = Clock.schedule_once(
+            lambda dt: self._on_cant_see(), TRIAL_TIMEOUT_S
+        )
 
-    def _on_digit(self, n: int):
-        if len(self._answer_buf) >= 1:
-            self._answer_buf = str(n)
-        else:
-            self._answer_buf += str(n)
-        self._answer_label.text = self._answer_buf
+    def _on_orient(self, orient: str):
+        self._commit(orient)
 
-    def _on_clear(self):
-        self._answer_buf = ""
-        self._answer_label.text = "—"
-
-    def _on_cant_see(self):
+    def _on_cant_see(self, *_a):
         self._commit(None)
 
-    def _on_submit_answer(self):
-        if not self._answer_buf:
+    def _commit(self, response: str | None):
+        self._cancel_timeout()
+        if self._session is None or self._trial is None:
             return
-        self._commit(int(self._answer_buf))
-
-    def _commit(self, value: int | None):
-        self._responses.append(value)
-        self._index += 1
-        if self._index >= len(self._battery):
-            self._show_hue()
-        else:
-            self._show_plate()
+        if self._phase != "trivector":
+            return
+        self._session.answer(self._trial, response)
+        self._trial = None
+        self._show_trial()
 
     # ── Hue arrangement ────────────────────────────────────────────────
     def _show_hue(self):
@@ -277,10 +280,9 @@ class TestScreen(Screen):
         )
 
     def _finish(self):
-        specs = [p.spec for p in self._battery]
-        answers = make_answers(specs, self._responses)
+        assert self._session is not None
         order = self._hue_strip.order if self._hue_strip else list(range(7))
-        self._result = score_screening(answers, hue_order=order)
+        self._result = score_trivector(self._session, hue_order=order)
         self._show_results()
 
     # ── Results ────────────────────────────────────────────────────────
@@ -288,17 +290,20 @@ class TestScreen(Screen):
         self._phase = "results"
         self._clear()
         r = self._result
+        assert r is not None
 
         sev_pct = int(round(r.severity * 100))
+        sev_lbl = severity_label(r.severity) if not r.is_normal else "none"
         if r.is_inconclusive:
             palette = "lavender"
-            sub = f"Could not clearly classify  ·  Matched normal on {r.plate_correct}/{r.plate_total}"
+            sub = f"Could not clearly classify  ·  Severity {sev_lbl} ({sev_pct})"
         elif r.is_normal:
             palette = "mint"
-            sub = f"Estimated severity {sev_pct}%  ·  Plates {r.plate_correct}/{r.plate_total}"
+            sub = f"Severity {sev_lbl}  ·  {sev_pct}/100"
         else:
             palette = "peach"
-            sub = f"Estimated severity {sev_pct}%  ·  Plates {r.plate_correct}/{r.plate_total}"
+            sub = f"Severity {sev_lbl}  ·  {sev_pct}/100"
+
         result_card = PastelCard(
             title=r.label,
             subtitle=sub,
@@ -307,6 +312,30 @@ class TestScreen(Screen):
             height=dp(120),
             interactive=False,
         )
+
+        sev_title = Label(
+            text="Severity",
+            font_name=Fonts.semibold,
+            font_size=dp(14),
+            color=Colors.text_muted,
+            size_hint_y=None,
+            height=dp(22),
+            halign="left",
+        )
+        sev_title.bind(size=lambda *_: setattr(sev_title, "text_size", sev_title.size))
+        sev_bar = SeverityBar(value=r.severity)
+
+        axis_title = Label(
+            text="Axis thresholds (protan / deutan / tritan)",
+            font_name=Fonts.semibold,
+            font_size=dp(14),
+            color=Colors.text_muted,
+            size_hint_y=None,
+            height=dp(22),
+            halign="left",
+        )
+        axis_title.bind(size=lambda *_: setattr(axis_title, "text_size", axis_title.size))
+        axis_bars = AxisBars(thresholds=r.thresholds, cutoffs=NORMAL_CUTOFF)
 
         disclaimer = PastelCard(
             title="Not a medical diagnosis",
@@ -331,7 +360,6 @@ class TestScreen(Screen):
             halign="left",
         )
         demo_title.bind(size=lambda *_: setattr(demo_title, "text_size", demo_title.size))
-
         demo = self._demo_pair(r)
 
         save = PrimaryButton(text="Save my profile")
@@ -341,7 +369,7 @@ class TestScreen(Screen):
         again = PrimaryButton(text="Retake test")
         again.bg_color = Colors.surface
         again.text_color = Colors.text
-        again.on_press_cb = lambda *_: self._show_intro()
+        again.on_press_cb = lambda *_: self._show_checklist()
 
         self._save_status = Label(
             text="",
@@ -356,6 +384,10 @@ class TestScreen(Screen):
             self._padded_scroll(
                 self._header("Your results"),
                 result_card,
+                sev_title,
+                sev_bar,
+                axis_title,
+                axis_bars,
                 disclaimer,
                 demo_title,
                 demo,
@@ -366,7 +398,6 @@ class TestScreen(Screen):
         )
 
     def _make_swatch_rgb(self, width: int, height: int = 72) -> np.ndarray:
-        """Full-width band swatch with no leftover black column."""
         w = max(6, int(width))
         h = int(height)
         demo = np.zeros((h, w, 3), dtype=np.uint8)
@@ -424,15 +455,14 @@ class TestScreen(Screen):
     def _save_profile(self, *_a):
         if self._result is None:
             return
+        from colorsight.storage import profile_path
+
         profile = self._result.to_profile()
         path = profile_path()
         profile.save(path)
         app = App.get_running_app()
         if app is not None:
             app.correction_profile = profile
-        # Friendly copy only — path stays in logs/docs
-        import logging
-
-        logging.getLogger("colorsight").info("Correction profile saved to %s", path)
+        log.info("Correction profile saved to %s", path)
         self._save_status.text = "Your color profile has been saved"
         self._save_status.color = Colors.accent_blue

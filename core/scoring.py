@@ -1,4 +1,8 @@
-"""Screening scoring from per-plate expected-answer tables."""
+"""Screening scoring.
+
+Legacy plate-based expected-answer tables remain for ``plates.py`` tests.
+The live Vision Test uses Cambridge Colour Test (Trivector) in ``trivector.py``.
+"""
 
 from __future__ import annotations
 
@@ -184,7 +188,7 @@ def make_answers(
 
 
 def simulate_respondent(viewer: str, specs: Sequence[PlateSpec] | None = None) -> list[PlateAnswer]:
-    """Build answers a given viewer type would give according to plate metadata."""
+    """Build answers a given viewer type would give according to plate metadata (legacy)."""
     from .plates import DEFAULT_BATTERY
 
     specs = tuple(specs) if specs is not None else DEFAULT_BATTERY
@@ -192,3 +196,10 @@ def simulate_respondent(viewer: str, specs: Sequence[PlateSpec] | None = None) -
         PlateAnswer(plate_id=s.plate_id, response=s.expected_for(viewer), spec=s)
         for s in specs
     ]
+
+
+# Re-export trivector scoring helpers used by the live test flow
+def score_trivector_session(session, hue_order: Sequence[int] | None = None):
+    from .trivector import score_trivector
+
+    return score_trivector(session, hue_order=hue_order)
