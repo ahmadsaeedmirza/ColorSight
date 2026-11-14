@@ -194,7 +194,7 @@ class PhotosScreen(Screen):
         sev_lbl.bind(size=lambda *_: setattr(sev_lbl, "text_size", sev_lbl.size))
         sev_row.add_widget(sev_lbl)
         self._sev_bar = PreviewSeverityBar(value=self._preview_severity)
-        self._sev_bar.on_change = self._on_severity
+        self._sev_bar.change_cb = self._on_severity
         sev_row.add_widget(self._sev_bar)
         self._sev_value = Label(
             text=f"{int(round(self._preview_severity * 100))}",
@@ -208,9 +208,10 @@ class PhotosScreen(Screen):
         self._body.add_widget(sev_row)
 
         self._toolbar = PhotoModeToolbar()
+        self._toolbar.mode_cb = self._on_mode
+        self._toolbar.save_cb = self._on_save
+        # Assign mode after mode_cb so the first sync does not call a missing handler
         self._toolbar.mode = self._mode
-        self._toolbar.on_mode = self._on_mode
-        self._toolbar.on_save = self._on_save
         self._body.add_widget(self._toolbar)
 
         change = PrimaryButton(text="Choose another photo")

@@ -1,4 +1,9 @@
-"""Widgets for the Photos (image correction) screen — avoid Kivy builtin names."""
+"""Widgets for the Photos (image correction) screen — avoid Kivy builtin names.
+
+Callback ObjectProperties must NOT be named ``on_<prop>`` when ``<prop>`` is also a
+Kivy property on the same widget — Kivy would call that attribute on change and
+crash if it is None (``TypeError: 'NoneType' object is not callable``).
+"""
 
 from __future__ import annotations
 
@@ -35,6 +40,11 @@ def rgb_to_texture(rgb: np.ndarray, existing: Texture | None = None) -> Texture:
         tex.min_filter = "linear"
     tex.blit_buffer(arr.tobytes(), colorfmt="rgb", bufferfmt="ubyte")
     return tex
+
+
+def _invoke(cb, *args) -> None:
+    if callable(cb):
+        cb(*args)
 
 
 class LoadingShimmer(Widget):
@@ -88,7 +98,8 @@ class PreviewSeverityBar(Widget):
     """Preview-only severity control (not a Kivy Slider; does not persist profile)."""
 
     value = NumericProperty(0.5)
-    on_change = ObjectProperty(None, allownone=True)
+    # Not named on_value — that would clash with Kivy's auto-handler for ``value``.
+    change_cb = ObjectProperty(None, allownone=True)
 
     def __init__(self, value=0.5, **kwargs):
         super().__init__(**kwargs)
@@ -98,9 +109,6 @@ class PreviewSeverityBar(Widget):
         self._dragging = False
         self.bind(pos=self._draw, size=self._draw, value=self._draw)
         self._draw()
-
-    def _track_y(self):
-        return self.center_y
 
     def _knob_x(self):
         pad = dp(12)
@@ -141,8 +149,7 @@ class PreviewSeverityBar(Widget):
         v = float(np.clip((x - self.x - pad) / usable, 0.0, 1.0))
         if abs(v - self.value) > 1e-4:
             self.value = v
-            if callable(self.on_change):
-                self.on_change(v)
+            _invoke(self.change_cb, v)
 
     def on_touch_down(self, touch):
         if not self.collide_point(*touch.pos):
@@ -187,25 +194,25 @@ class _ModeChip(ButtonBehavior, Label):
         self.color = (1, 1, 1, 1) if active else (0.72, 0.72, 0.72, 1)
 
     def on_release(self):
-        if callable(self._on_tap):
-            self._on_tap(self.key)
+        _invoke(self._on_tap, self.key)
 
 
 class PhotoModeToolbar(BoxLayout):
     """Floating dark pill: Original | Corrected | Simulation + Save."""
 
     mode = StringProperty("corrected")
-    on_mode = ObjectProperty(None, allownone=True)
-    on_save = ObjectProperty(None, allownone=True)
+    # Named mode_cb / save_cb — NOT on_mode / on_save (clash with Kivy on_<prop>).
+    mode_cb = ObjectProperty(None, allownone=True)
+    save_cb = ObjectProperty(None, allownone=True)
 
     def __init__(self, **kwargs):
+        self._chips = {}
         super().__init__(**kwargs)
         self.orientation = "horizontal"
         self.size_hint_y = None
         self.height = dp(52)
         self.padding = [dp(8), dp(6), dp(8), dp(6)]
         self.spacing = dp(4)
-        self._chips = {}
         for key, label in (
             ("original", "Original"),
             ("corrected", "Corrected"),
@@ -224,17 +231,24 @@ class PhotoModeToolbar(BoxLayout):
         )
         hit.bind(on_release=lambda *_: self._do_save())
         self.add_widget(hit)
-        self.bind(pos=self._draw, size=self._draw, mode=self._sync_mode)
+        self.bind(pos=self._draw, size=self._draw)
+        self._sync_mode()
         self._draw()
 
+    def on_mode(self, _instance, _value):
+        """Kivy auto-handler when ``mode`` changes — must be a real method, not None."""
+        if self._chips:
+            self._sync_mode()
+        _invoke(self.mode_cb, self.mode)
+
     def _do_save(self):
-        if callable(self.on_save):
-            self.on_save()
+        _invoke(self.save_cb)
 
     def _tap_mode(self, key: str):
-        self.mode = key
-        if callable(self.on_mode):
-            self.on_mode(key)
+        if self.mode != key:
+            self.mode = key
+        else:
+            self._sync_mode()
 
     def _sync_mode(self, *_a):
         for k, chip in self._chips.items():
@@ -261,7 +275,8 @@ class BeforeAfterViewer(FloatLayout):
     """Pinch-zoom / pan photo stage with optional before/after divider."""
 
     split = NumericProperty(0.5)
-    on_split = ObjectProperty(None, allownone=True)
+    # Named split_cb — NOT on_split (would clash with Kivy auto-handler for ``split``).
+    split_cb = ObjectProperty(None, allownone=True)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -295,14 +310,22 @@ class BeforeAfterViewer(FloatLayout):
         self.add_widget(self._handle)
         self._handle.opacity = 0
 
-        self.bind(pos=self._layout, size=self._layout, split=self._on_split_prop)
+        self.bind(pos=self._layout, size=self._layout)
         Clock.schedule_once(lambda dt: self._layout(), 0)
+
+    def on_split(self, _instance, _value):
+        """Kivy auto-handler when ``split`` changes."""
+        self._refresh_display()
+        self._place_handle()
+        _invoke(self.split_cb, self.split)
 
     def set_images(self, original: np.ndarray | None, right: np.ndarray | None, mode: str):
         self._orig = original
         self._right = right
         self._mode = mode
         self._handle.opacity = 1 if mode == "corrected" and original is not None and right is not None else 0
+        if mode != "corrected":
+            self.canvas.after.clear()
         self._refresh_display()
         self._layout()
 
@@ -311,12 +334,7 @@ class BeforeAfterViewer(FloatLayout):
         self._right = None
         self._photo.texture = None
         self._handle.opacity = 0
-
-    def _on_split_prop(self, *_a):
-        self._refresh_display()
-        self._place_handle()
-        if callable(self.on_split):
-            self.on_split(self.split)
+        self.canvas.after.clear()
 
     def _compose(self) -> np.ndarray | None:
         if self._orig is None:
@@ -325,7 +343,6 @@ class BeforeAfterViewer(FloatLayout):
             return self._orig
         if self._mode == "simulation":
             return self._right
-        # corrected → before/after split
         return before_after_split(self._orig, self._right, self.split)
 
     def _refresh_display(self):
@@ -359,8 +376,8 @@ class BeforeAfterViewer(FloatLayout):
 
     def _place_handle(self):
         if self._handle.opacity <= 0 or self._photo.texture is None:
+            self.canvas.after.clear()
             return
-        # Handle along viewer vertical center at split fraction of scatter width
         sx, sy = self._scatter.pos
         sw = self._photo.width * self._scatter.scale
         sh = self._photo.height * self._scatter.scale

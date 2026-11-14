@@ -48,9 +48,12 @@ python -m unittest tests.test_image_pipeline -v
 # Headless pipeline smoke (correct + save to Pictures/ColorSight)
 python tools/flow_photos.py          # → FLOW_PHOTOS_OK …
 
-# Desktop UI smoke (no-profile → profile → pick sample → modes → save)
-python tools/smoke_photos_ui.py      # → SMOKE_PHOTOS_OK …
+# Desktop UI smoke (no-profile → pick → tap every mode + severity + split → save)
+python tools/smoke_photos_ui.py      # → SMOKE_PHOTOS_OK … toolbar_modes_ok …
 ```
+
+If mode taps crash with `NoneType is not callable`, check that Photos widgets do not use `on_mode` / `on_split` as `ObjectProperty` names (see `rules.md`).
+
 
 - Preview longest side ≈ **1080 px**; full-res only on Save (JPEG quality 95).
 - Severity on Photos is a **temporary preview override** — does not rewrite `correction_profile.json`.

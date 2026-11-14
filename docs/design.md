@@ -148,8 +148,8 @@ Apply the **same** clamped value to fill **and** matching shadow layers. Used by
 | `Numpad` (test) | Legacy digit pad (plates flow retired from UI) |
 | `HueStrip` (test) | Tap-to-swap hue tiles for arrangement step |
 | `BeforeAfterViewer` (photos) | Pinch/pan stage + before/after divider (round white handle + Material `drag_handle`) |
-| `PhotoModeToolbar` (photos) | Dark pill segments Original \| Corrected \| Simulation + Save (nav-style) |
-| `PreviewSeverityBar` (photos) | Preview-only severity track (**not** named `Slider`) — does not persist profile |
+| `PhotoModeToolbar` (photos) | Dark pill segments Original \| Corrected \| Simulation + Save; callbacks via `mode_cb` / `save_cb` (never `on_mode` ObjectProperty) |
+| `PreviewSeverityBar` (photos) | Preview-only severity track (**not** named `Slider`); `change_cb` — does not persist profile |
 | `LoadingShimmer` (photos) | Thin animated bar while bg-thread preview/save runs |
 
 ## Screen list

@@ -104,6 +104,8 @@ Reuses **`core.apply_correction`**, **`core.apply_simulation`**, and **`Correcti
 
 Helpers: `colorsight/image_pipeline.py`, `colorsight/photo_io.py`. Widgets: `BeforeAfterViewer`, `PhotoModeToolbar`, `PreviewSeverityBar`, `LoadingShimmer` (not named `Slider`/`Image`).
 
+Toolbar/viewer optional callbacks are `mode_cb` / `save_cb` / `split_cb` / `change_cb` — **not** `on_mode` / `on_split` ObjectProperties (those clash with Kivy’s auto `on_<prop>` handlers and caused a NoneType crash on mode tap).
+
 ## UI notes
 
 - Test flow: **checklist → Trivector trials (D-pad + can't see, 6 s timeout) → hue arrange → results**.

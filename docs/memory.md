@@ -4,6 +4,20 @@ Newest entries first. Append after every prompt per `rules.md`.
 
 ---
 
+## 2026-11-14 — Fix Photos toolbar mode crash (`on_mode` None)
+
+**Prompt:** Tapping Original/Corrected/Simulation crashed with `TypeError: 'NoneType' object is not callable` (photo_widgets `_tap_mode` → `mode=` → Kivy observer None).
+
+**Cause:** Kivy auto-calls `on_<prop>` when a property changes. `PhotoModeToolbar` had both `mode = StringProperty(...)` and `on_mode = ObjectProperty(None)` — so dispatch invoked `None`. Same trap existed for `split` / `on_split`.
+
+**Fix:** Rename callback props to `mode_cb`, `save_cb`, `split_cb`, `change_cb`. Real `on_mode` / `on_split` methods sync UI + `_invoke` optional cbs. Guard all callbacks with `callable`. Mode taps update highlight + cached preview.
+
+**Smoke:** `tools/smoke_photos_ui.py` now taps every toolbar mode, severity bar, before/after split, then save → `SMOKE_PHOTOS_OK … toolbar_modes_ok severity_ok split_ok save_ok`.
+
+**Docs/rules:** Kivy `on_<prop>` naming pitfall noted.
+
+---
+
 ## 2026-11-14 — Photos screen (image correction)
 
 **Prompt:** Build Photos — profile gate, Android Photo Picker / desktop chooser, before/after viewer, Original|Corrected|Simulation + preview severity (no profile overwrite), ~1080 preview + bg thread/cache/debounce, full-res MediaStore/Pictures save, pastel UI, pipeline unit tests + desktop smoke. Do **not** change `/core` math, vision test, scoring, or existing tests.
