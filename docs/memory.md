@@ -4,6 +4,25 @@ Newest entries first. Append after every prompt per `rules.md`.
 
 ---
 
+## 2026-11-14 — Photos screen (image correction)
+
+**Prompt:** Build Photos — profile gate, Android Photo Picker / desktop chooser, before/after viewer, Original|Corrected|Simulation + preview severity (no profile overwrite), ~1080 preview + bg thread/cache/debounce, full-res MediaStore/Pictures save, pastel UI, pipeline unit tests + desktop smoke. Do **not** change `/core` math, vision test, scoring, or existing tests.
+
+**Added**
+- `colorsight/image_pipeline.py` — EXIF transpose load, resize longest≤1080, RGB↔BGR, before/after split, JPEG95/PNG encode
+- `colorsight/photo_io.py` — desktop tk chooser; Android Photo Picker + URI→temp; MediaStore album ColorSight; friendly “Saved to your gallery”
+- `colorsight/screens/photos.py` + `photo_widgets.py` — `BeforeAfterViewer`, `PhotoModeToolbar`, `PreviewSeverityBar`, `LoadingShimmer`
+- `tests/test_image_pipeline.py` (9); `tools/flow_photos.py`; `tools/smoke_photos_ui.py`
+- Icons: `save`, `drag_handle`, `add_photo`, `tune`, `check`
+
+**Behavior:** No profile → CTA to Test. Severity uses `CorrectionProfile.create` in memory only. Corrected mode = left original / right corrected with white handle. Cache makes mode toggles instant.
+
+**Verified:** 54 unittest OK; `FLOW_PHOTOS_OK`; `SMOKE_PHOTOS_OK no_profile_ok profile_ok pick_ok modes_ok save_ok`. Core untouched.
+
+**Docs:** architecture, design, production (picker/MediaStore/permissions), phases, rules, memory.
+
+---
+
 ## 2026-11-14 — Vision Test UI polish (D-pad, stim, results)
 
 **Prompt:** UI-only — D-pad centering/overlap; “Question N”; crisp stim + less lag; results disclaimer/axis labels/severity number. No `/core` or test changes.

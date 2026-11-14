@@ -13,15 +13,17 @@
 
 ```
 ColorSight/
-├── core/
-│   ├── trivector.py   # LIVE Vision Test — CCT Trivector (u'v' staircases)
-│   ├── plates.py      # LEGACY Ishihara-style plates (kept + tested, not in UI flow)
-│   ├── scoring.py     # Legacy plate scoring + hue_arrangement_error
+├── core/                # CVD math only (do not change for Photos UI)
+│   ├── trivector.py / plates.py / scoring.py
 │   ├── machado.py / engine.py / profile.py / naming.py
-├── tests/             # Engine + trivector + legacy plate gates
-├── tools/             # preview_plates.py, flow_trivector.py
-├── debug/             # gitignored preview output
-└── colorsight/        # Kivy UI (test_screen Trivector flow, …)
+├── tests/               # Engine + trivector + plates + image_pipeline
+├── tools/               # flow_trivector.py, flow_photos.py, smoke_photos_ui.py
+└── colorsight/
+    ├── image_pipeline.py   # EXIF load, resize≤1080, before/after split, encode
+    ├── photo_io.py         # Desktop chooser; Android Photo Picker + MediaStore
+    └── screens/
+        ├── photos.py / photo_widgets.py   # Photos correction UI
+        └── test_screen.py / test_widgets.py
 ```
 
 ## Live Vision Test — Cambridge Colour Test Trivector (`core/trivector.py`)
@@ -87,11 +89,27 @@ Simulation: \(\mathbf{rgb}_{sim} = S(\textit{type}, s)\,\mathbf{rgb}\) (Machado 
 Daltonization: \(C = I + E(I - S)\).  
 Naming: Lab nearest swatch + HSV neutrals.
 
+## Photos — image correction (UI layer)
+
+Reuses **`core.apply_correction`**, **`core.apply_simulation`**, and **`CorrectionProfile`** unchanged.
+
+| Step | Behavior |
+|------|----------|
+| Profile gate | Load via `storage.profile_path()` / `app.correction_profile`. No profile → pink CTA card → Test. |
+| Pick | Desktop: tkinter jpg/png/webp. Android 13+: Photo Picker (`PICK_IMAGES`); older: `GET_CONTENT` + optional `READ_MEDIA_IMAGES` / `READ_EXTERNAL_STORAGE`. |
+| Preview | Longest side ≤ **1080**; bg thread + shimmer; ~100 ms severity debounce; cache Corrected/Simulation for instant mode toggle. |
+| Modes | Original / Corrected (before–after split) / Simulation (“how this looks to you”). |
+| Severity | **Preview-only** via `CorrectionProfile.create(type, sev)` — never writes the saved JSON. |
+| Save | Full-res correction → JPEG q95. Desktop: `Pictures/ColorSight/`. Android: MediaStore album **ColorSight** (scoped storage). UI: “Saved to your gallery” (no paths). |
+
+Helpers: `colorsight/image_pipeline.py`, `colorsight/photo_io.py`. Widgets: `BeforeAfterViewer`, `PhotoModeToolbar`, `PreviewSeverityBar`, `LoadingShimmer` (not named `Slider`/`Image`).
+
 ## UI notes
 
 - Test flow: **checklist → Trivector trials (D-pad + can't see, 6 s timeout) → hue arrange → results**.
 - Trial UI: persistent shell; stimulus at **512 px** via `next_trial(size=…)` (no core edits), **linear** texture filter; label “Question N” (axis name hidden).
 - Results: type; severity “N / 100”; axis rows (label + ×cutoff + 1.0× tick); `PastelCard(auto_height=True)` disclaimer; before/after; Save (friendly copy only).
+- Photos: profile gate → pick → pinch/pan viewer + mode pill + severity preview → save.
 - `FloatingNavBar`: five identical slots; blue `+` FAB clamped inside pill.
-- Never name custom widgets after built-in Kivy widgets (`PillProgressBar`, `ArrowPad`, …).
+- Never name custom widgets after built-in Kivy widgets (`PillProgressBar`, `PreviewSeverityBar`, …).
 - `Icon` glyph sizing uses **`icon_size`** (not Kivy `size=` float) — see `design.md`.

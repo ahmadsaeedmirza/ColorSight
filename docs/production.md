@@ -39,6 +39,23 @@ Requires NumPy + OpenCV (`opencv-python` or `opencv-python-headless`).
 - Full suite: `python -m unittest discover -s tests`
 - Legacy plate previews: `python tools/preview_plates.py` → `debug/plates/` (gitignored).
 
+### Photos / image pipeline
+
+```bash
+# Pipeline unit tests (EXIF, resize, RGB/BGR, before/after split)
+python -m unittest tests.test_image_pipeline -v
+
+# Headless pipeline smoke (correct + save to Pictures/ColorSight)
+python tools/flow_photos.py          # → FLOW_PHOTOS_OK …
+
+# Desktop UI smoke (no-profile → profile → pick sample → modes → save)
+python tools/smoke_photos_ui.py      # → SMOKE_PHOTOS_OK …
+```
+
+- Preview longest side ≈ **1080 px**; full-res only on Save (JPEG quality 95).
+- Severity on Photos is a **temporary preview override** — does not rewrite `correction_profile.json`.
+- UI never shows filesystem paths (pick/save confirmations are friendly copy only).
+
 ## Android packaging (Buildozer)
 
 Buildozer is typically run on **Linux** (or WSL2 / a CI Linux image). Native Windows Buildozer is not recommended.
@@ -91,12 +108,23 @@ Declared in `buildozer.spec` / AndroidManifest (via Buildozer):
 
 | Permission | Why |
 |------------|-----|
-| `CAMERA` | Live camera correction + magnifier (Phase 1) |
-| `READ_EXTERNAL_STORAGE` / media read | Pick photos to correct (Phase 1) |
-| `WRITE_EXTERNAL_STORAGE` (older APIs) | Save corrected images if needed |
+| `CAMERA` | Live camera correction + magnifier (remaining Phase 1) |
+| `READ_MEDIA_IMAGES` (API 33+) | Fallback gallery access on older flows |
+| `READ_EXTERNAL_STORAGE` | Pre-13 gallery fallback |
+| `WRITE_EXTERNAL_STORAGE` | Legacy pre-10 only; **not** required for MediaStore saves on Android 10+ |
 | `INTERNET` | Optional; keep off unless a feature needs it |
 
-Phase 0 shell does not request runtime camera/storage usage yet; declare early so packaging is ready.
+### Photos pick & save (Android)
+
+| API | Pick | Save |
+|-----|------|------|
+| **13+ (API 33+)** | System **Photo Picker** (`android.provider.action.PICK_IMAGES`) via pyjnius — **no** broad storage permission | `MediaStore` insert with `RELATIVE_PATH=Pictures/ColorSight` (scoped storage) |
+| **10–12** | `ACTION_GET_CONTENT` / openable URI → copy to app temp | Same MediaStore path; no `WRITE_EXTERNAL_STORAGE` needed |
+| **≤9** | May need `READ_EXTERNAL_STORAGE` runtime grant (`ensure_read_images_permission`) | MediaStore or app `getExternalFilesDir` fallback |
+
+Desktop: tkinter file chooser; save under `~/Pictures/ColorSight/`.
+
+`pyjnius` + `android` are already in `buildozer.spec` requirements for these bridges.
 
 ## Asset packaging (fonts & icons)
 
@@ -123,8 +151,9 @@ Must ship with the APK:
 - [ ] Orientation / safe areas look acceptable on the target phone
 - [ ] Vision Test completes (checklist → Trivector → hue → results) and Save profile writes JSON
 - [ ] Result disclaimer visible (screening ≠ diagnosis; screens vary)
+- [ ] Photos: no-profile CTA → Test; with profile → pick → Original/Corrected/Simulation → Save appears in Gallery **ColorSight** album
+- [ ] Photos on Android 13+: Photo Picker works without granting all-files storage
 - [ ] (Phase 1) Camera permission prompt and preview
-- [ ] (Phase 1) Gallery pick + corrected image display
 
 ## Known issues / notes
 

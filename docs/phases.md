@@ -22,16 +22,15 @@
 | ArrowPad Icon crash fix — use `icon_size`, not Kivy `size=` float | Done |
 | Vision Test UI polish — D-pad, Question N, crisp stim blit, results labels/auto-height | Done |
 | UI polish — result swatches, friendly save copy, nav slots + centered FAB | Done |
+| **Photos / image correction** — profile gate, picker, before/after, modes, MediaStore save | Done |
 
 ### Remaining in-app features
 
 | Feature | Description |
 |---------|-------------|
-| Correction profile UI | View/edit saved profile on Profile screen |
-| Image correction | Apply profile to gallery photos |
+| Correction profile UI | View/edit saved profile on Profile screen (“Update my profile”) |
 | Live camera correction | Apply profile to live feed |
 | Magnifier lens | Loupe + `name_color` under sample |
-| Simulation view | Dedicated before/after / deficiency preview |
 
 Stack: NumPy + OpenCV in `core/`, Kivy UI in `colorsight/`, Buildozer packaging.
 

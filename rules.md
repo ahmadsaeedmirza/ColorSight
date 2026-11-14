@@ -29,9 +29,11 @@ This is not optional. Documentation is part of the deliverable, not an afterthou
 - **Live Vision Test** uses Cambridge Colour Test Trivector (`core/trivector.py`). Keep `tests/test_trivector.py` green (gamut, luminance match, staircase, type/severity calibration). Do not change correction-engine math when tuning the test.
 - **Legacy plates** (`core/plates.py`) stay in-repo with `tests/test_plate_validation.py` + `tests/test_plate_recognizability.py` green, but are **not** used in the live Test UI flow.
 - **Vision Test results** must keep a clear screening disclaimer (not a medical diagnosis; display variation). After save, show friendly copy only — never surface filesystem paths in the UI.
+- **Photos** must reuse `core.apply_correction` / `apply_simulation` / `CorrectionProfile` — do not reimplement CVD math in the UI. Preview severity is temporary; never overwrite the saved profile from Photos. Never show file paths in pick/save UI.
+- **Photos Android I/O:** prefer Photo Picker + MediaStore (no broad storage on 13+ / no `WRITE_EXTERNAL_STORAGE` on 10+). Keep `tests/test_image_pipeline.py` green when touching pipeline helpers.
 - Desktop-first during development: `python main.py` must keep working; `python -m unittest discover -s tests` must stay green when touching `/core`.
 - Do not implement Phase 2 (system-wide color filter / Shizuku) until Phase 1 is complete and explicitly requested.
-- **Never name custom widgets after built-in Kivy widgets** (`ProgressBar`, `Button`, `Label`, `Slider`, `Image`, `Switch`, …). Kivy binds `style.kv` by class name and will crash or mis-style collisions. Use prefixed names (e.g. `PillProgressBar`).
+- **Never name custom widgets after built-in Kivy widgets** (`ProgressBar`, `Button`, `Label`, `Slider`, `Image`, `Switch`, …). Kivy binds `style.kv` by class name and will crash or mis-style collisions. Use prefixed names (e.g. `PillProgressBar`, `PreviewSeverityBar`).
 - **Icons:** use `colorsight.widgets.Icon` + Material Icons ligatures — never Lexend/emoji for chrome icons. Glyph size = **`icon_size=`** (default 24); never pass Kivy widget `size=` a single number.
 - **PastelCard** long copy: use `auto_height=True` so wrapped subtitles are not clipped.
 - **Radii:** always clamp with `clamp_radius` / `clamped_radii` (`min(r, w/2, h/2)`) on fills and shadows.

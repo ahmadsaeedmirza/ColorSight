@@ -38,7 +38,12 @@ Registered as `Fonts.icons` (`MaterialIcons`). Use ligature names from `Icons` i
 | `settings` | `settings` | Home grid |
 | `add` | `add` | Center FAB |
 | `arrow_forward` | `arrow_forward` | Welcome CTA |
-| `arrow_back` | `arrow_back` | Placeholder back |
+| `arrow_back` | `arrow_back` | Placeholder / Photos back |
+| `save` | `save` | Photos toolbar |
+| `drag_handle` | `drag_handle` | Before/after divider knob |
+| `add_photo` | `add_photo_alternate` | Photos empty state (optional) |
+| `tune` | `tune` | Severity / preview strength |
+| `check` | `check` | Confirmations |
 
 Helper: `colorsight.widgets.Icon` — consistent glyph size, color, and font registration.
 
@@ -142,6 +147,10 @@ Apply the **same** clamped value to fill **and** matching shadow layers. Used by
 | `SeverityBar` (test) | Capsule + numeric “N / 100” label |
 | `Numpad` (test) | Legacy digit pad (plates flow retired from UI) |
 | `HueStrip` (test) | Tap-to-swap hue tiles for arrangement step |
+| `BeforeAfterViewer` (photos) | Pinch/pan stage + before/after divider (round white handle + Material `drag_handle`) |
+| `PhotoModeToolbar` (photos) | Dark pill segments Original \| Corrected \| Simulation + Save (nav-style) |
+| `PreviewSeverityBar` (photos) | Preview-only severity track (**not** named `Slider`) — does not persist profile |
+| `LoadingShimmer` (photos) | Thin animated bar while bg-thread preview/save runs |
 
 ## Screen list
 
@@ -150,7 +159,15 @@ Apply the **same** clamped value to fill **and** matching shadow layers. Used by
 | `welcome` | Big title, subtitle, dark arrow CTA, stacked pastel feature cards |
 | `home` | Header (menu + avatar), chips, pastel feature grid |
 | `test` | **Vision test** — checklist → Trivector Landolt C → hue arrange → results (Save profile) |
-| `photos` / `camera` / `lens` / `profile` / `settings` | Placeholders (Phase 1 remaining) |
+| `photos` | **Image correction** — profile gate, pick, before/after, modes, save |
+| `camera` / `lens` / `profile` / `settings` | Placeholders (Phase 1 remaining) |
+
+### Photos screen recipe
+
+- **No profile:** pink `PastelCard` + “Go to Vision Test” (never show paths).
+- **Empty:** pink card + large “Choose a photo”.
+- **Viewer:** fitted photo, pinch/pan; Corrected mode shows left=original / right=corrected with draggable divider; floating dark mode pill; Severity preview bar; Save → “Saved to your gallery”.
+- Bottom padding = `nav_clearance` so content clears the floating nav.
 
 ### Test screen recipe
 
