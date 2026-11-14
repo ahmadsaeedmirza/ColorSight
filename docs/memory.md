@@ -4,6 +4,23 @@ Newest entries first. Append after every prompt per `rules.md`.
 
 ---
 
+## 2026-11-14 — Core color engine (`/core`) + unit tests
+
+**Prompt:** Build pure-Python color engine (no UI): Machado CVD simulation, daltonization/correction, `CorrectionProfile` JSON, vectorized `apply_*`, `name_color`, tests in `/tests`, document math in architecture, update all docs.
+
+**Decisions:**
+- Package at project-root `core/` (not under `colorsight/`) so engine stays UI-free.
+- Machado et al. 2009 tabulated matrices (0.0–1.0 step 0.1) with linear interpolation for in-between severity.
+- Daltonization via Fidaner-style error shift; store composite \(C = I + E(I-S)\) on the profile for one matmul per frame.
+- `name_color`: OpenCV Lab nearest-neighbor + HSV neutrals; small named palette.
+- Tests: `unittest` discover in `/tests` (18 passing, including soft 720p timing).
+
+**Files:** `core/*`, `tests/*`, `docs/*`, `rules.md`, `buildozer.spec` include `core/*`.
+
+**Deferred:** Wiring engine into Kivy screens (test/photos/camera/lens), gamma-aware linear RGB path, on-device camera loop.
+
+---
+
 ## 2026-11-14 — Shell visual bugfix (icons, pills, chips, nav, scroll)
 
 **Prompt:** Fix Home screenshot issues — empty icon boxes, oval pills, black chip with invisible text, nav overflow, content under nav; same checks on Welcome. No features. Update all docs.

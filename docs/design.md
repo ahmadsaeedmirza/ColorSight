@@ -2,6 +2,8 @@
 
 Reference language: vibrant pastel **notes app** — light canvas, bold rounded sans titles, colorful rounded cards, floating dark pill navigation with a blue center action.
 
+Color math (simulation, correction, naming) lives in `/core` and is documented in `architecture.md` — this file stays UI/visual only. Future screens should call `core` APIs rather than reimplement transforms.
+
 ## Brand & typography
 
 | Token | Value |

@@ -8,8 +8,8 @@
 | **Kivy** | UI framework | Cross-platform (desktop + Android via Buildozer); flexible canvas for custom pastel UI |
 | **KivyMD** | *Not used (Phase 0)* | Material defaults fight the pastel notes look; pure Kivy + custom widgets is cleaner |
 | **Material Icons TTF** | UI icons | Lexend has no icon glyphs; ligature font keeps icons vector-sharp and consistent |
-| **NumPy** | Array math | Fast color transforms, matrix ops for correction profiles (Phase 1) |
-| **OpenCV** | Image / camera | Capture, resize, color-space conversion, live frame pipelines |
+| **NumPy** | Array math | Vectorized 3×3 CVD transforms for real-time frames |
+| **OpenCV** | Color spaces / I/O | RGB↔Lab/HSV for naming; future camera/image pipelines |
 | **Buildozer** | Android packaging | Standard Kivy → APK/AAB path; permissions and recipe management |
 
 ## Folder structure
@@ -24,52 +24,108 @@ ColorSight/
 ├── assets/
 │   ├── fonts/              # Lexend TTFs + OFL
 │   └── icons/              # MaterialIcons-Regular.ttf + Apache LICENSE
-└── colorsight/
-    ├── app.py              # ColorSightApp + RootShell (SM + FloatingNavBar)
+├── core/                   # Pure-Python color engine (no UI)
+│   ├── cvd_types.py
+│   ├── machado.py          # Machado 2009 matrices + severity interpolation
+│   ├── engine.py           # simulate / daltonize / apply_*
+│   ├── profile.py          # CorrectionProfile + JSON I/O
+│   └── naming.py           # name_color (Lab nearest + HSV neutrals)
+├── tests/                  # unittest suite for /core
+└── colorsight/             # Kivy UI shell
+    ├── app.py
     ├── theme/
-    │   ├── tokens.py       # Colors, Radii, Spacing, Fonts, Icons
-    │   ├── theme.py        # register_fonts() — Lexend + Material Icons
-    │   └── geometry.py     # clamp_radius / clamped_radii
     ├── widgets/
-    │   ├── icon.py         # Icon helper (Material ligatures)
-    │   ├── rounded_card.py
-    │   ├── pastel_card.py
-    │   ├── chip.py
-    │   ├── pill_search_bar.py
-    │   ├── floating_nav_bar.py
-    │   └── primary_button.py
     └── screens/
-        ├── welcome.py
-        ├── home.py
-        ├── _placeholder.py
-        └── test / photos / camera / lens / profile / settings
 ```
 
-## Modules (current)
+## Modules
 
-- **`colorsight.app`** — `RootShell` hosts `ScreenManager` + floating nav (hidden on `welcome`); nav width = screen − 2×`nav_margin`.
+### UI (`colorsight`)
+
+- **`colorsight.app`** — `RootShell` hosts `ScreenManager` + floating nav.
 - **`colorsight.theme`** — Tokens, font/icon registration, geometry clamping.
-- **`colorsight.widgets`** — Design-system components including `Icon`.
-- **`colorsight.screens`** — Shell screens; nav-visible screens use ScrollView + `Spacing.nav_clearance` bottom padding.
+- **`colorsight.widgets` / `screens`** — Shell UI only (no color math).
 
-## Data flow (Phase 0 shell)
+### Color engine (`core`) — Phase 1 foundation
+
+| Module | Responsibility |
+|--------|----------------|
+| `cvd_types` | `CVDType`: protanopia, deuteranopia, tritanopia (+ aliases) |
+| `machado` | Tabulated Machado et al. 2009 3×3 RGB matrices; interpolate severity |
+| `engine` | `simulation_matrix`, `build_correction_matrix`, `apply_simulation`, `apply_correction` |
+| `profile` | `CorrectionProfile(type, severity, matrix)` save/load JSON |
+| `naming` | `name_color(rgb)` via Lab nearest-neighbor + HSV neutral handling |
+
+Public import: `from core import CorrectionProfile, apply_correction, apply_simulation, name_color, CVDType`.
+
+## Data flow
 
 ```
-main.py
-  └─ ColorSightApp.build()
-       ├─ register_fonts()  # Lexend + Material Icons
-       ├─ ScreenManager
-       │    ├─ welcome → home (CTA)
-       │    ├─ home ↔ test / photos / camera / lens / profile / settings
-       │    └─ FloatingNavBar switches named screens
-       └─ (Phase 1 later) correction profile → image/camera pipelines
+Vision test (UI, later) → type + severity
+        ↓
+CorrectionProfile.create() → C = I + E(I − S)
+        ↓
+JSON on disk  ←→  profile.save / load
+        ↓
+apply_correction(image, profile)   # photos / live camera
+apply_simulation(image, type, sev) # simulation view
+name_color(rgb)                    # magnifier lens label
 ```
+
+## Color math (brief)
+
+### Simulation — Machado et al. 2009
+
+CVD appearance is a single linear map in RGB:
+
+\[
+\mathbf{rgb}_{sim} = S(\textit{type},\, s)\, \mathbf{rgb}
+\]
+
+- \(S\) is a 3×3 matrix from Machado’s published tables (severity \(s \in [0,1]\), step 0.1).
+- \(s = 0\) → identity (normal vision); \(s = 1\) → dichromacy (protanopia / deuteranopia / tritanopia).
+- Intermediate \(s\): linear interpolation between adjacent tabulated matrices.
+
+### Daltonization / correction — Fidaner-style error shift
+
+1. Simulate: \(\mathbf{rgb}_{sim} = S\,\mathbf{rgb}\)
+2. Error (lost information): \(\mathbf{e} = \mathbf{rgb} - \mathbf{rgb}_{sim} = (I - S)\,\mathbf{rgb}\)
+3. Redistribute with type-specific \(E\) into channels the user can still use:
+
+\[
+\mathbf{rgb}_{out} = \mathbf{rgb} + E\,\mathbf{e} = \bigl(I + E(I - S)\bigr)\mathbf{rgb}
+\]
+
+The composite correction matrix stored on the profile is:
+
+\[
+C = I + E(I - S)
+\]
+
+So real-time paths are one vectorized matmul per frame: `pixels @ C.T`, then clip to [0, 1] / uint8.
+
+Error-shift \(E\) (rows = output R,G,B):
+
+| Type | Idea |
+|------|------|
+| Protanopia | Push lost red into G and B |
+| Deuteranopia | Push lost green into R and B |
+| Tritanopia | Push lost blue into R and G |
+
+### Color naming
+
+1. Convert sample RGB → CIE Lab (OpenCV) and HSV.
+2. Low saturation → black / gray / white by value.
+3. Otherwise nearest named swatch by Euclidean Lab distance (small fixed palette: “dark red”, “light green”, “olive”, …).
+
+### Performance
+
+Transforms are fully vectorized NumPy (`reshape(-1,3) @ M.T`). No per-pixel Python loops. Unit tests include a soft 720p timing budget.
 
 ## Design decisions
 
-1. **Pure Kivy over KivyMD** for pastel cards + floating pill nav.
-2. **Material Icons font** (not emoji / Lexend) for all chrome icons.
-3. **Clamp every canvas radius** with `min(r, w/2, h/2)` so pills are capsules.
-4. **Tokens in Python** (`tokens.py`) shared by widgets and docs.
-5. **Stable screen ids** for nav and future deep-links.
-6. **Desktop-first** — `python main.py` before Buildozer cycles.
+1. **`core/` is UI-free** so math can be unit-tested and reused by future screens without Kivy.
+2. **Machado tables** (not Brettel/Viénot alone) for unified anomalous-trichromacy severity.
+3. **Composite \(C\)** stored on `CorrectionProfile` for fast apply + JSON portability.
+4. **RGB order** in `core` APIs (convert BGR↔RGB at camera/OpenCV boundaries in UI later).
+5. Pure Kivy UI; Material Icons; clamp canvas radii; desktop-first.

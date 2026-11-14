@@ -16,6 +16,15 @@ python main.py
 
 Window size defaults to a phone-like portrait frame for layout checks (OS DPI may scale the actual pixel size). Resize is allowed; screens should remain usable.
 
+### Core engine unit tests
+
+```bash
+# From project root (venv active)
+python -m unittest discover -s tests -v
+```
+
+Requires NumPy + OpenCV (`opencv-python` or `opencv-python-headless`).
+
 ## Android packaging (Buildozer)
 
 Buildozer is typically run on **Linux** (or WSL2 / a CI Linux image). Native Windows Buildozer is not recommended.
@@ -86,8 +95,8 @@ Must ship with the APK:
 
 `buildozer.spec`:
 
-- `source.include_exts` includes `ttf`, `otf`, `txt`, `md`
-- `source.include_patterns` includes `assets/*`, `assets/fonts/*`, `assets/icons/*`
+- `source.include_exts` includes `ttf`, `otf`, `txt`, `md`, `py`
+- `source.include_patterns` includes `assets/*`, `assets/fonts/*`, `assets/icons/*`, `core/*`, `colorsight/*`
 
 ## Testing checklist (device)
 
@@ -108,6 +117,7 @@ Must ship with the APK:
 - **Kivy camera on desktop** differs from Android `Camera` / `Camera2` providers — Phase 1 must test live feed on-device.
 - **Radius 999**: never pass unclamped into `RoundedRectangle` — use `clamp_radius` (see `design.md`).
 - Soft shadows are approximated with layered rounded rects; they will not match Material elevation exactly.
+- **`core/` packaging**: Android builds must include `core/*` (color engine) alongside `colorsight/*`.
 
 ## `buildozer.spec` highlights
 
@@ -115,4 +125,4 @@ Must ship with the APK:
 - Orientation: portrait
 - Requirements: `python3,kivy,numpy,opencv` (OpenCV Android recipe may need pinning — verify on first real build)
 - Permissions: camera + storage as above
-- Icons + fonts included via `assets/**` patterns
+- Icons + fonts via `assets/**`; engine via `core/*`

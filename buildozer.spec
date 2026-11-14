@@ -5,7 +5,7 @@ package.domain = org.colorsight
 
 source.dir = .
 source.include_exts = py,png,jpg,jpeg,kv,atlas,ttf,otf,md,txt
-source.include_patterns = assets/*,assets/fonts/*,assets/icons/*,docs/*,colorsight/*
+source.include_patterns = assets/*,assets/fonts/*,assets/icons/*,docs/*,colorsight/*,core/*
 
 version = 0.1.0
 
