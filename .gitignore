@@ -1,0 +1,17 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.dist/
+build/
+bin/
+.gradle/
+.env
+.idea/
+.vscode/
+*.apk
+*.aab
+.FAKESECRET_o3p4q5r6s7t8u9v0w1x2
+.pytest_cache/
+*.log
