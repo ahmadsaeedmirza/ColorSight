@@ -251,6 +251,10 @@ class _CamChip(ButtonBehavior, Label):
         self.valign = "middle"
         self.size_hint = (1, 1)
         self._active = active
+        # Fixed toolbar slots: single line + ellipsis (cannot grow like Home Chip)
+        self.shorten = True
+        self.shorten_from = "right"
+        self.max_lines = 1
         self.bind(size=lambda *_: setattr(self, "text_size", self.size))
 
     def set_active(self, active: bool):

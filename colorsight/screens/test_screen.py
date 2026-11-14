@@ -8,6 +8,7 @@ import time
 import numpy as np
 from kivy.app import App
 from kivy.clock import Clock
+from kivy.core.window import Window
 from kivy.metrics import dp
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.image import Image
@@ -24,8 +25,8 @@ from core import (
     score_trivector,
     severity_label,
 )
-from colorsight.theme.tokens import Colors, Fonts, Icons, Spacing
-from colorsight.widgets import PastelCard, PrimaryButton, RoundIconButton
+from colorsight.theme.tokens import Colors, Fonts, Spacing
+from colorsight.widgets import PastelCard, PrimaryButton, ScreenHeader
 from colorsight.screens.test_widgets import (
     ArrowPad,
     AxisBars,
@@ -40,7 +41,15 @@ log = logging.getLogger("colorsight")
 TRIAL_TIMEOUT_S = 6.0
 # ~3× display resolution; linear-filtered downscale looks crisp (UI-only size param)
 STIM_SIZE = 512
-DISPLAY_DP = 170  # fits 360×640 with D-pad; ~30 mm on phone DPI
+DISPLAY_DP = 132  # fits 360×640 with inverted-T pad + nav clearance
+# Desktop / physical arrow keycodes (Kivy)
+_KEY_UP, _KEY_DOWN, _KEY_RIGHT, _KEY_LEFT = 273, 274, 275, 276
+_ARROW_KEYS = {
+    _KEY_UP: "up",
+    _KEY_DOWN: "down",
+    _KEY_LEFT: "left",
+    _KEY_RIGHT: "right",
+}
 
 
 class TestScreen(Screen):
@@ -62,19 +71,25 @@ class TestScreen(Screen):
         self._question_n = 0
         self._timeout_ev = None
         self._mode = "phone"
+        self._keys_bound = False
         self._trial_update_ms: list[float] = []
         self._trial_blit_ms: list[float] = []
         self._body = BoxLayout(orientation="vertical")
         self.add_widget(self._body)
         self.bind(on_pre_enter=self._on_enter)
+        self.bind(on_pre_leave=self._on_leave)
         self._show_checklist()
 
     def _on_enter(self, *_a):
         if self._phase in ("intro", "checklist", "results"):
             self._show_checklist()
 
+    def _on_leave(self, *_a):
+        self._unbind_keys()
+
     def _clear(self):
         self._cancel_timeout()
+        self._unbind_keys()
         self._body.clear_widgets()
         # Detach trial shell from tree but keep widgets for reuse
         self._trial_shell_ready = False
@@ -85,28 +100,36 @@ class TestScreen(Screen):
             self._timeout_ev = None
 
     def _header(self, title: str, show_back=True):
-        row = BoxLayout(orientation="horizontal", size_hint_y=None, height=dp(44))
-        if show_back:
-            btn = RoundIconButton(icon=Icons.arrow_back, diameter=40)
-            btn.bg_color = Colors.surface
-            btn.icon_color = Colors.text
-            btn.on_press_cb = lambda *_: self._go_home()
-            row.add_widget(btn)
-        title_lbl = Label(
-            text=title,
-            font_name=Fonts.bold,
-            font_size=dp(20),
-            color=Colors.text,
-            halign="left",
-            valign="middle",
+        return ScreenHeader(
+            title=title,
+            show_back=show_back,
+            on_back=self._go_home if show_back else None,
         )
-        title_lbl.bind(size=lambda *_: setattr(title_lbl, "text_size", title_lbl.size))
-        row.add_widget(title_lbl)
-        return row
+
+    def _bind_keys(self):
+        if not self._keys_bound:
+            Window.bind(on_key_down=self._on_key_down)
+            self._keys_bound = True
+
+    def _unbind_keys(self):
+        if self._keys_bound:
+            Window.unbind(on_key_down=self._on_key_down)
+            self._keys_bound = False
+
+    def _on_key_down(self, _window, key, _scancode, _codepoint, _modifiers):
+        """Physical arrow keys answer the current trial; nothing else advances."""
+        if self._phase != "trivector":
+            return False
+        orient = _ARROW_KEYS.get(key)
+        if orient is None:
+            return False
+        self._on_orient(orient)
+        return True
 
     def _go_home(self, *_a):
         self._phase = "checklist"
         self._cancel_timeout()
+        self._unbind_keys()
         if self.manager:
             self.manager.current = "home"
 
@@ -190,54 +213,71 @@ class TestScreen(Screen):
         self._show_trial()
 
     def _build_trial_shell(self):
-        """Build trial widgets once; subsequent trials only update texture/labels."""
+        """Build trial widgets once; subsequent trials only update texture/labels.
+
+        Compact vertical layout sized for 360×640 without needing scroll on a phone.
+        """
         self._body.clear_widgets()
+        # Bottom inset clears floating nav (~64+18) without the full scroll
+        # clearance budget so the trial fits 360×640 without scrolling.
+        trial_bottom = dp(Spacing.nav_height + Spacing.nav_margin + 8)
+        col = BoxLayout(
+            orientation="vertical",
+            padding=[
+                dp(Spacing.screen_x),
+                dp(Spacing.xs),
+                dp(Spacing.screen_x),
+                trial_bottom,
+            ],
+            spacing=dp(4),
+        )
+        col.add_widget(self._header("Vision Test"))
+
         self._q_label = Label(
             text="Question 1",
             font_name=Fonts.semibold,
-            font_size=dp(14),
+            font_size=dp(13),
             color=Colors.text_muted,
             size_hint_y=None,
-            height=dp(22),
+            height=dp(20),
             halign="left",
         )
         self._q_label.bind(size=lambda *_: setattr(self._q_label, "text_size", self._q_label.size))
+        col.add_widget(self._q_label)
 
         self._progress = PillProgressBar(progress=0.0)
+        col.add_widget(self._progress)
 
         self._stim_image = Image(
             size_hint_y=None,
             height=dp(DISPLAY_DP),
             fit_mode="contain",
         )
+        col.add_widget(self._stim_image)
 
         self._prompt = Label(
             text="Which way does the gap open?",
             font_name=Fonts.bold,
-            font_size=dp(17),
+            font_size=dp(16),
             color=Colors.text,
             size_hint_y=None,
-            height=dp(26),
+            height=dp(24),
             halign="left",
         )
         self._prompt.bind(size=lambda *_: setattr(self._prompt, "text_size", self._prompt.size))
+        col.add_widget(self._prompt)
 
-        # Spacing between prompt and pad
-        prompt_gap = Widget(size_hint_y=None, height=dp(12))
+        # Clear gap above the pad
+        col.add_widget(Widget(size_hint_y=None, height=dp(8)))
 
         self._pad = ArrowPad(on_orient=self._on_orient, on_cant_see=self._on_cant_see)
+        col.add_widget(self._pad)
 
-        self._trial_scroll = self._padded_scroll(
-            self._header("Vision Test"),
-            self._q_label,
-            self._progress,
-            self._stim_image,
-            self._prompt,
-            prompt_gap,
-            self._pad,
-            spacing=Spacing.sm,
-        )
-        self._body.add_widget(self._trial_scroll)
+        # Spacer absorbs leftover height on taller windows
+        col.add_widget(Widget(size_hint_y=1))
+
+        self._trial_scroll = col
+        self._body.add_widget(col)
         self._trial_shell_ready = True
 
     # ── Trivector trials ───────────────────────────────────────────────
@@ -271,6 +311,7 @@ class TestScreen(Screen):
         self._trial_update_ms.append((t1 - t0) * 1000.0)
         self._trial_blit_ms.append((t1 - t_gen) * 1000.0)
 
+        self._bind_keys()
         self._timeout_ev = Clock.schedule_once(
             lambda dt: self._on_cant_see(), TRIAL_TIMEOUT_S
         )

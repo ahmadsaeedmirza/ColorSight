@@ -152,7 +152,7 @@ class HomeScreen(Screen):
             options=["All", "Test", "Photos", "Camera", "Lens", "Profile"],
             selected="All",
         )
-        chips.on_change = self._on_chip
+        chips.change_cb = self._on_chip
         self._content.add_widget(chips)
 
         self._grid_host = BoxLayout(orientation="vertical", size_hint_y=None, height=dp(1))
@@ -203,7 +203,7 @@ class HomeScreen(Screen):
                 size_hint_y=None,
                 height=dp(h),
             )
-            card.on_select = self._open(screen)
+            card.select_cb = self._open(screen)
             grid.add_widget(card)
         # Odd count: spacer
         if len(visible) % 2 == 1:

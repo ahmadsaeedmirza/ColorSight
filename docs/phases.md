@@ -13,6 +13,7 @@
 | `/core` Machado simulation + daltonization + `CorrectionProfile` + `name_color` | Done |
 | Unit tests for engine | Done |
 | **Vision Test UI** — Trivector CCT + hue arrange + results + save profile | Done |
+| **UI polish** — Chip auto-width/scroll, inverted-T D-pad + keyboard arrows, ScreenHeader gap/top inset | Done |
 | Plate generator (legacy) — kept + tested, not in live UI | Done |
 | Trivector core + calibration tests | Done |
 | **Photos** — pick, Corrected@0% divider, Strength, save/share, comparison | Done |

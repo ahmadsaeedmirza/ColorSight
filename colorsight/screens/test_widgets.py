@@ -11,7 +11,6 @@ from kivy.uix.anchorlayout import AnchorLayout
 from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.floatlayout import FloatLayout
-from kivy.uix.gridlayout import GridLayout
 from kivy.uix.label import Label
 from kivy.uix.widget import Widget
 
@@ -123,7 +122,8 @@ class Numpad(BoxLayout):
             self._on_submit()
 
 
-ARROW_KEY_DP = 76
+ARROW_KEY_DP = 72
+ARROW_GAP_DP = 8
 
 
 class ArrowKey(ButtonBehavior, FloatLayout):
@@ -159,7 +159,6 @@ class ArrowKey(ButtonBehavior, FloatLayout):
             fill = (0.96, 0.96, 0.96, 1) if self._pressed else Colors.surface
             Color(*fill)
             RoundedRectangle(pos=self.pos, size=self.size, radius=radii)
-        # Center icon
         self._icon.center = self.center
 
     def on_press(self):
@@ -178,48 +177,48 @@ class ArrowKey(ButtonBehavior, FloatLayout):
 
 
 class ArrowPad(BoxLayout):
-    """D-pad cross: Up / Left·Right / Down + full-width “I can't see it”."""
+    """Keyboard-style inverted-T arrows: Up alone, then Left·Down·Right + can't-see."""
 
     def __init__(self, on_orient=None, on_cant_see=None, **kwargs):
         super().__init__(**kwargs)
         self.orientation = "vertical"
-        self.spacing = dp(10)
+        self.spacing = dp(ARROW_GAP_DP)
         self.size_hint_y = None
         key = dp(ARROW_KEY_DP)
-        gap = dp(10)
-        # 3 key rows + can't-see
-        self.height = key * 3 + gap * 2 + dp(48) + dp(10)
+        gap = dp(ARROW_GAP_DP)
+        # 2 key rows + can't-see (fits 360×640 with stimulus)
+        self.height = key * 2 + gap + dp(48) + dp(10)
         self._on_orient = on_orient
         self._on_cant_see = on_cant_see
 
-        grid = GridLayout(
-            cols=3,
-            rows=3,
-            spacing=gap,
-            size_hint=(None, None),
-            size=(key * 3 + gap * 2, key * 3 + gap * 2),
+        # Top: Up centered
+        top = AnchorLayout(
+            anchor_x="center",
+            anchor_y="center",
+            size_hint_y=None,
+            height=key,
         )
-        # Row 0: empty | Up | empty
-        grid.add_widget(Widget(size_hint=(None, None), size=(key, key)))
-        grid.add_widget(ArrowKey("up", Icons.arrow_upward, on_orient=self._tap))
-        grid.add_widget(Widget(size_hint=(None, None), size=(key, key)))
-        # Row 1: Left | empty | Right
-        grid.add_widget(ArrowKey("left", Icons.arrow_back, on_orient=self._tap))
-        grid.add_widget(Widget(size_hint=(None, None), size=(key, key)))
-        grid.add_widget(ArrowKey("right", Icons.arrow_forward, on_orient=self._tap))
-        # Row 2: empty | Down | empty
-        grid.add_widget(Widget(size_hint=(None, None), size=(key, key)))
-        grid.add_widget(ArrowKey("down", Icons.arrow_downward, on_orient=self._tap))
-        grid.add_widget(Widget(size_hint=(None, None), size=(key, key)))
+        top.add_widget(ArrowKey("up", Icons.arrow_upward, on_orient=self._tap))
+        self.add_widget(top)
 
-        # Center the grid horizontally
+        # Bottom: Left | Down | Right (Down under Up)
+        bottom = BoxLayout(
+            orientation="horizontal",
+            size_hint=(None, None),
+            size=(key * 3 + gap * 2, key),
+            spacing=gap,
+            pos_hint={"center_x": 0.5},
+        )
+        bottom.add_widget(ArrowKey("left", Icons.arrow_back, on_orient=self._tap))
+        bottom.add_widget(ArrowKey("down", Icons.arrow_downward, on_orient=self._tap))
+        bottom.add_widget(ArrowKey("right", Icons.arrow_forward, on_orient=self._tap))
         holder = AnchorLayout(
             anchor_x="center",
             anchor_y="center",
             size_hint_y=None,
-            height=key * 3 + gap * 2,
+            height=key,
         )
-        holder.add_widget(grid)
+        holder.add_widget(bottom)
         self.add_widget(holder)
 
         cant = PrimaryButton(text="I can't see it")

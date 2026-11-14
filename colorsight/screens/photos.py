@@ -35,8 +35,8 @@ from colorsight.screens.photo_widgets import (
     TextLinkButton,
 )
 from colorsight.storage import profile_path
-from colorsight.theme.tokens import Colors, Fonts, Icons, Spacing
-from colorsight.widgets import PastelCard, PrimaryButton, RoundIconButton
+from colorsight.theme.tokens import Colors, Fonts, Spacing
+from colorsight.widgets import PastelCard, PrimaryButton, ScreenHeader
 
 log = logging.getLogger(__name__)
 
@@ -123,26 +123,18 @@ class PhotosScreen(Screen):
 
     def _build_shell(self):
         self._root.clear_widgets()
-        header = BoxLayout(
-            orientation="horizontal",
-            size_hint_y=None,
-            height=dp(52),
-            padding=[dp(Spacing.screen_x), dp(Spacing.sm), dp(Spacing.screen_x), 0],
-            spacing=dp(8),
+        header = ScreenHeader(
+            title="Photos",
+            on_back=lambda: self._go("home"),
+            include_top_inset=True,
         )
-        back = RoundIconButton(icon=Icons.arrow_back, diameter=40)
-        back.on_press_cb = lambda *_: self._go("home")
-        header.add_widget(back)
-        title = Label(
-            text="Photos",
-            font_name=Fonts.bold,
-            font_size=dp(22),
-            color=Colors.text,
-            halign="left",
-            valign="middle",
-        )
-        title.bind(size=lambda *_: setattr(title, "text_size", title.size))
-        header.add_widget(title)
+        header.padding = [
+            dp(Spacing.screen_x),
+            dp(Spacing.screen_top),
+            dp(Spacing.screen_x),
+            0,
+        ]
+        header.height = dp(48) + dp(Spacing.screen_top)
         self._root.add_widget(header)
 
         self._body = BoxLayout(

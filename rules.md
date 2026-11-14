@@ -38,11 +38,15 @@ This is not optional. Documentation is part of the deliverable, not an afterthou
 - **Phase 1 is complete.** Do not implement Phase 2 (system-wide SurfaceFlinger 4×4 color matrix via Shizuku) until explicitly requested after the device checklist in `production.md`.
 - **Profile fine-tune** is the only UI that overwrites the saved correction profile (always confirm). Photos/Camera Strength remain preview-only.
 - **Never name custom widgets after built-in Kivy widgets** (`ProgressBar`, `Button`, `Label`, `Slider`, `Image`, `Switch`, …). Kivy binds `style.kv` by class name and will crash or mis-style collisions. Use prefixed names (e.g. `PillProgressBar`, `PreviewSeverityBar`).
-- **Kivy callback props:** do **not** name an `ObjectProperty` `on_<name>` when the same widget also has a Kivy property `<name>` (e.g. `mode` + `on_mode`). Kivy will call that attribute on change and crash if it is `None`. Use `mode_cb` / `save_cb` / `split_cb` / `change_cb`, and always `if callable(cb)` before invoke.
+- **Kivy callback props:** never name callback `ObjectProperty`s `on_<name>` (conflicts with Kivy’s property observers, even without a matching `<name>` prop). Use `*_cb` (`mode_cb`, `select_cb`, `change_cb`, `navigate_cb`, …) and always `if callable(cb)` before invoke.
 - **Icons:** use `colorsight.widgets.Icon` + Material Icons ligatures — never Lexend/emoji for chrome icons. Glyph size = **`icon_size=`** (default 24); never pass Kivy widget `size=` a single number.
+- **Chips / pill labels:** Home `Chip` must stay **single-line** and grow to the label (`text_size=(None,None)`; width = texture + ~18 dp pad/side). Put chip rows in a horizontal scrollbar-free `ScrollView` for narrow widths. Fixed-width toolbar segments use `shorten=True` + `max_lines=1` instead of wrapping.
+- **ScreenHeader:** back control + `Spacing.header_gap` before the title on every back+title screen; use `Spacing.screen_top` (or `include_top_inset`) so headers are not clipped under the status area.
+- **Vision Test D-pad:** keyboard inverted-T (Up; Left·Down·Right); desktop arrow keys may answer; do not advance trials from other keys. Keep orient / can't-see mapping unchanged.
 - **PastelCard** long copy: use `auto_height=True` so wrapped subtitles are not clipped.
 - **Radii:** always clamp with `clamp_radius` / `clamped_radii` (`min(r, w/2, h/2)`) on fills and shadows.
-- **Nav screens:** ScrollView (or equivalent) + `Spacing.nav_clearance` bottom padding so content is not hidden behind the floating nav.
+- **Nav screens:** ScrollView (or equivalent) + `Spacing.nav_clearance` bottom padding so content is not hidden behind the floating nav (trial screen may use a tighter bottom inset that still clears the nav pill).
+- **No orphan timers** that change app state by themselves; never show filesystem paths in the UI.
 
 ## Scope discipline
 

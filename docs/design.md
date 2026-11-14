@@ -120,6 +120,8 @@ Apply the **same** clamped value to fill **and** matching shadow layers. Used by
 |-------|-------|
 | `space_xs` … `space_xl` | 6 / 10 / 16 / 24 / 32 |
 | Screen horizontal padding | 20–24 |
+| `screen_top` | 16 dp safe inset under status / notch |
+| `header_gap` | 10 dp between back button and title |
 | Card grid gap | 12–14 |
 | `nav_margin` | 18 dp (16–20) side inset for floating nav |
 | `nav_height` | 64 dp pill |
@@ -139,12 +141,13 @@ Apply the **same** clamped value to fill **and** matching shadow layers. Used by
 | `Icon` | Material Icons ligature label — size via **`icon_size`**, not Kivy `size=` float |
 | `RoundedCard` | Base card with clamped radius + soft shadow |
 | `PastelCard` | Colored note card + accent dot, title, subtitle |
-| `Chip` / `ChipRow` | Pill filters — selected = dark + **white** label; unselected = white + dark label, vertically centered |
+| `Chip` / `ChipRow` | Single-line pills: width = label texture + ~18 dp pad each side (no `text_size` width wrap). `ChipRow` = horizontal ScrollView (`bar_width=0`). Selected = dark + **white** label; unselected = white + dark label, vertically centered. Callbacks: `select_cb` / `change_cb` |
+| `ScreenHeader` | Back (44 dp) + `header_gap` + title; optional `include_top_inset` / trailing |
 | `PillSearchBar` | Capsule search with Material `search` icon |
-| `FloatingNavBar` | Dark pill, equal slots, labels for all items, raised blue `add` FAB; fits width with side margins |
+| `FloatingNavBar` | Dark pill, equal slots, labels for all items, raised blue `add` FAB; `navigate_cb` |
 | `PrimaryButton` / `RoundIconButton` | Filled CTA / circular icon button |
 | `PillProgressBar` (test) | Thin capsule progress (**not** named `ProgressBar` — avoids Kivy builtin clash) |
-| `ArrowPad` / `ArrowKey` (test) | D-pad cross (76 dp keys, centered icons, soft shadow, press feedback) + full-width “I can't see it” |
+| `ArrowPad` / `ArrowKey` (test) | Keyboard inverted-T: Up alone, then Left·Down·Right (72 dp keys, 8 dp gaps, soft shadow, press feedback) + full-width “I can't see it” |
 | `AxisBars` (test) | Row per axis: pastel dot + Protan/Deutan/Tritan + ×cutoff value; bar with 1.0× tick |
 | `SeverityBar` (test) | Capsule + numeric “N / 100” label |
 | `Numpad` (test) | Legacy digit pad (plates flow retired from UI) |
@@ -187,7 +190,10 @@ Apply the **same** clamped value to fill **and** matching shadow layers. Used by
 ### Test screen recipe
 
 - **Checklist** (yellow/mint, `PastelCard(auto_height=True)`): brightness / night mode / ~40 cm / glasses  
-- **Trivector**: “Question N” + progress capsule; Landolt C ~170 dp from a **512 px** texture (linear filter); prompt with clear gap above a **D-pad** (Up / Left·Right / Down, empty center); “I can't see it” full width; ~6 s timeout. Trial shell is **reused** (texture blit only) so the tree is not rebuilt each question. Fits 360×640 with scroll clearance.  
+- **Trivector**: “Question N” + progress capsule; Landolt C ~132 dp from a **512 px** texture (linear filter); prompt with clear gap above an **inverted-T D-pad** (Up; Left·Down·Right @ 72 dp / 8 dp gaps); “I can't see it” full width; ~6 s timeout. Desktop: physical arrow keys answer (nothing else advances). Trial shell is **reused** (texture blit only). Compact column (~570 dp) fits **360×640** without scroll; bottom inset = `nav_height + nav_margin + 8` (clears floating nav).  
+- **Headers**: every back+title screen uses `ScreenHeader` (`header_gap` ~10 dp) so the title never overlaps the back control; Settings / Photos / Profile / Camera use `screen_top` inset.  
+
+
 - **Hue** then **results**: type card; severity bar with “N / 100”; axis rows with labels + ×cutoff + 1.0× tick; yellow disclaimer with **auto-height** wrapped text (no clipping); before/after swatches; **Save my profile**  
 - After save: **“Your color profile has been saved”** (never show file paths)
 

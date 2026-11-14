@@ -21,8 +21,8 @@ from colorsight.screens.confirm_sheet import ConfirmSheet
 from colorsight.screens.photo_widgets import PreviewSeverityBar, TextLinkButton, rgb_to_texture
 from colorsight.screens.test_widgets import AxisBars, SeverityBar, numpy_to_texture
 from colorsight.storage import profile_path
-from colorsight.theme.tokens import Colors, Fonts, Icons, Spacing
-from colorsight.widgets import PastelCard, PrimaryButton, RoundIconButton
+from colorsight.theme.tokens import Colors, Fonts, Spacing
+from colorsight.widgets import PastelCard, PrimaryButton, ScreenHeader
 from core.engine import apply_simulation
 from core.trivector import severity_label
 
@@ -93,26 +93,18 @@ class ProfileScreen(Screen):
 
     def _build_shell(self):
         self._root.clear_widgets()
-        header = BoxLayout(
-            orientation="horizontal",
-            size_hint_y=None,
-            height=dp(52),
-            padding=[dp(Spacing.screen_x), dp(Spacing.sm), dp(Spacing.screen_x), 0],
-            spacing=dp(8),
+        header = ScreenHeader(
+            title="Profile",
+            on_back=lambda: self._go("home"),
+            include_top_inset=True,
         )
-        back = RoundIconButton(icon=Icons.arrow_back, diameter=40)
-        back.on_press_cb = lambda *_: self._go("home")
-        header.add_widget(back)
-        title = Label(
-            text="Profile",
-            font_name=Fonts.bold,
-            font_size=dp(22),
-            color=Colors.text,
-            halign="left",
-            valign="middle",
-        )
-        title.bind(size=lambda *_: setattr(title, "text_size", title.size))
-        header.add_widget(title)
+        header.padding = [
+            dp(Spacing.screen_x),
+            dp(Spacing.screen_top),
+            dp(Spacing.screen_x),
+            0,
+        ]
+        header.height = dp(48) + dp(Spacing.screen_top)
         self._root.add_widget(header)
         self._body_host = BoxLayout(orientation="vertical", size_hint=(1, 1))
         self._root.add_widget(self._body_host)

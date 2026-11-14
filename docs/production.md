@@ -32,8 +32,10 @@ Requires NumPy + OpenCV (`opencv-python` or `opencv-python-headless`).
 - Headless smoke: `python tools/flow_trivector.py` → prints `FLOW_OK …`.
 - Saved profile path (logs/docs only): Kivy `user_data_dir` / `correction_profile.json` — UI shows a friendly confirmation, not the path.
 - Progress UI widget is `PillProgressBar` (not Kivy’s `ProgressBar`).
-- Arrow pad: D-pad `ArrowKey` widgets with `Icon(..., icon_size=28)` — do not pass `size=dp(28)`.
-- Trial shell is persistent (texture blit ~1 ms); stimulus request size 512 for crisp display.
+- Arrow pad: **inverted-T** `ArrowKey` widgets (72 dp, 8 dp gaps) with `Icon(..., icon_size=28)` — do not pass `size=dp(28)`. Desktop physical arrow keys answer trials.
+- Trial shell is persistent (texture blit ~1 ms); stimulus request size 512; display ~132 dp; fits 360×640 without scroll.
+- Home chips: auto-width + horizontal scroll (`tools/smoke_ui_polish.py`, `tools/smoke_ui_flow.py`).
+- Headers: `ScreenHeader` with `header_gap` / `screen_top` on Test, Photos, Camera, Settings, Profile.
 - Trivector gates: `python -m unittest tests.test_trivector -v`
 - Legacy plate gates (still required): `python -m unittest tests.test_plate_validation tests.test_plate_recognizability -v`
 - Full suite: `python -m unittest discover -s tests`

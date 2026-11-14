@@ -54,17 +54,15 @@ class RootShell(FloatLayout):
             SettingsScreen(),
         ):
             self.sm.add_widget(screen)
-        self.sm.bind(current=self._on_screen)
-        self.add_widget(self.sm)
-
-        # First run → Welcome; later launches → Home
-        self.sm.current = "welcome" if is_first_run() else "home"
-
         self.nav = FloatingNavBar()
-        self.nav.on_navigate = self._navigate
+        self.nav.navigate_cb = self._navigate
+        self.add_widget(self.sm)
         self.add_widget(self.nav)
         self.bind(size=self._place_nav)
         self._place_nav()
+        self.sm.bind(current=self._on_screen)
+        # First run → Welcome; later launches → Home (after nav exists)
+        self.sm.current = "welcome" if is_first_run() else "home"
         self._on_screen(self.sm, self.sm.current)
 
         Window.bind(on_keyboard=self._on_key)

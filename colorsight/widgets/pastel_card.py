@@ -34,7 +34,7 @@ class PastelCard(ButtonBehavior, RoundedCard):
     palette = StringProperty("yellow")
     show_dot = BooleanProperty(True)
     auto_height = BooleanProperty(False)
-    on_select = ObjectProperty(None, allownone=True)
+    select_cb = ObjectProperty(None, allownone=True)
 
     def __init__(self, title="", subtitle="", palette="yellow", auto_height=False, **kwargs):
         fill, accent = PASTEL_PALETTE.get(palette, PASTEL_PALETTE["yellow"])
@@ -135,5 +135,5 @@ class PastelCard(ButtonBehavior, RoundedCard):
         self._accent = accent
 
     def on_release(self):
-        if callable(self.on_select):
-            self.on_select(self)
+        if callable(self.select_cb):
+            self.select_cb(self)

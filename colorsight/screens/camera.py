@@ -39,8 +39,8 @@ from colorsight.photo_io import is_android, save_corrected_image
 from colorsight.screens.camera_widgets import CameraModeToolbar, LivePreviewStage, LoupeOverlay
 from colorsight.screens.photo_widgets import PreviewSeverityBar, TextLinkButton
 from colorsight.storage import profile_path
-from colorsight.theme.tokens import Colors, Fonts, Icons, Spacing
-from colorsight.widgets import PastelCard, PrimaryButton, RoundIconButton
+from colorsight.theme.tokens import Colors, Fonts, Spacing
+from colorsight.widgets import PastelCard, PrimaryButton, ScreenHeader
 
 log = logging.getLogger(__name__)
 
@@ -146,20 +146,6 @@ class CameraScreen(Screen):
 
     def _rebuild(self):
         self._overlay.clear_widgets()
-        header = BoxLayout(orientation="horizontal", size_hint_y=None, height=dp(44), spacing=dp(8))
-        back = RoundIconButton(icon=Icons.arrow_back, diameter=40)
-        back.on_press_cb = lambda *_: self._go("home")
-        header.add_widget(back)
-        title = Label(
-            text="Camera",
-            font_name=Fonts.bold,
-            font_size=dp(20),
-            color=Colors.text,
-            halign="left",
-            valign="middle",
-        )
-        title.bind(size=lambda *_: setattr(title, "text_size", title.size))
-        header.add_widget(title)
         self._fps_lbl = Label(
             text="",
             font_name=Fonts.medium,
@@ -168,7 +154,12 @@ class CameraScreen(Screen):
             size_hint=(None, 1),
             width=dp(64),
         )
-        header.add_widget(self._fps_lbl)
+        header = ScreenHeader(
+            title="Camera",
+            on_back=lambda: self._go("home"),
+            trailing=self._fps_lbl,
+            include_top_inset=True,
+        )
         self._overlay.add_widget(header)
 
         self._body = FloatLayout(size_hint=(1, 1))

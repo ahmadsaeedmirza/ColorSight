@@ -45,7 +45,7 @@ Target chromaticity = background moved toward the axis copunctal by distance **d
 
 - Dot field via `pack_circles_dense` (shared with plates).
 - **Landolt C** of target chromaticity; gap ≈ 1/5 of outer diameter; orientation ∈ {up, down, left, right}.
-- Display size ≈ **190 dp** (~30 mm).
+- Display size ≈ **132 dp** on the trial screen (texture still 512 px, linear-filtered).
 - Per-dot luminance jitter from the **same** distribution for target and background (no luminance cue).
 
 ### Staircase (published CCT style)
@@ -132,5 +132,9 @@ Helpers/widgets also: Photos `BeforeAfterViewer`, `PhotoModeToolbar`, `PreviewSe
 
 - Test flow: **checklist → Trivector trials → hue → results**.
 - Photos / Camera / Lens as above.
-- `FloatingNavBar`: five identical slots; blue `+` FAB clamped inside pill.
-- Never name custom widgets after built-in Kivy widgets; `Icon` uses **`icon_size`**.
+- `FloatingNavBar`: five identical slots; blue `+` FAB clamped inside pill; `navigate_cb`.
+- `Chip` / `ChipRow`: auto-width single-line pills in a scrollbar-free horizontal `ScrollView`; `select_cb` / `change_cb`.
+- `ScreenHeader`: shared back + gap + title (Photos, Camera, Settings, Profile, Test).
+- `ArrowPad`: keyboard inverted-T; desktop `Window.on_key_down` arrows map to the same orient callbacks.
+- Never name custom widgets after built-in Kivy widgets; `Icon` uses **`icon_size`**; callback props use `*_cb` + `callable()`.
+- `RootShell` creates the nav **before** setting `sm.current` so first-run / Home switch cannot touch a missing nav.

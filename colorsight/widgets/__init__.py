@@ -5,6 +5,7 @@ from .pill_search_bar import PillSearchBar
 from .floating_nav_bar import FloatingNavBar
 from .primary_button import PrimaryButton, RoundIconButton
 from .icon import Icon
+from .screen_header import ScreenHeader
 
 __all__ = [
     "RoundedCard",
@@ -16,4 +17,5 @@ __all__ = [
     "PrimaryButton",
     "RoundIconButton",
     "Icon",
+    "ScreenHeader",
 ]

@@ -4,6 +4,20 @@ Newest entries first. Append after every prompt per `rules.md`.
 
 ---
 
+## 2026-11-14 — UI-only: chips, D-pad, headers
+
+**Prompt:** Fix Home Chip wrap (“Camer/a”); inverted-T Vision Test D-pad + desktop arrow keys; header back/title gap + Settings top inset; narrow desktop pass; update docs. Do **not** touch `/core`, staircase, thresholds, scoring, or existing tests.
+
+**Chips:** `Chip` no longer binds `text_size` to widget size (that forced wrap). Width = texture + 18 dp pad/side; `ChipRow` in horizontal `ScrollView` (`bar_width=0`). Callbacks renamed `select_cb` / `change_cb`. Toolbar `_ModeChip` / `_CamChip`: `shorten` + `max_lines=1`.
+
+**D-pad:** `ArrowPad` keyboard layout (Up; Left·Down·Right), 72/8 dp; same orient / can't-see callbacks. `TestScreen` binds `Window.on_key_down` (273–276) only during trivector. Compact trial column (~570 dp) fits 360×640 without scroll.
+
+**Headers:** new `ScreenHeader` (`header_gap`, optional `screen_top`) on Test / Photos / Camera / Settings / Profile. Tokens: `Spacing.screen_top`, `Spacing.header_gap`.
+
+**Other:** `PastelCard.select_cb`, `FloatingNavBar.navigate_cb`; `RootShell` builds nav before setting `sm.current` (Home launch crash). Smokes: `tools/smoke_ui_polish.py`, `tools/smoke_ui_flow.py`. Unit tests OK in venv (76).
+
+---
+
 ## 2026-11-14 — Phase 1 final polish (Profile, Settings, build)
 
 **Prompt:** Profile + Settings; app-wide polish (first-run, Home, back); Android buildozer/icons/WSL/`build_android.sh`; final review + README. No core math / vision-test logic / scoring / existing test breakage.

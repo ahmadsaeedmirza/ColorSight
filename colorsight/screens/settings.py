@@ -14,8 +14,8 @@ from kivy.graphics import Color, RoundedRectangle
 
 from colorsight import __version__
 from colorsight.theme.geometry import clamped_radii
-from colorsight.theme.tokens import Colors, Fonts, Icons, Radii, Spacing
-from colorsight.widgets import PastelCard, RoundIconButton
+from colorsight.theme.tokens import Colors, Fonts, Radii, Spacing
+from colorsight.widgets import PastelCard, ScreenHeader
 
 
 class _FpsToggle(ButtonBehavior, BoxLayout):
@@ -74,7 +74,7 @@ class SettingsScreen(Screen):
             orientation="vertical",
             padding=[
                 dp(Spacing.screen_x),
-                dp(Spacing.lg),
+                dp(Spacing.screen_top),
                 dp(Spacing.screen_x),
                 dp(Spacing.nav_clearance),
             ],
@@ -83,21 +83,9 @@ class SettingsScreen(Screen):
         )
         root.bind(minimum_height=root.setter("height"))
 
-        header = BoxLayout(orientation="horizontal", size_hint_y=None, height=dp(44), spacing=dp(8))
-        back = RoundIconButton(icon=Icons.arrow_back, diameter=40)
-        back.on_press_cb = lambda *_: self._go("home")
-        header.add_widget(back)
-        title = Label(
-            text="Settings",
-            font_name=Fonts.bold,
-            font_size=dp(22),
-            color=Colors.text,
-            halign="left",
-            valign="middle",
+        root.add_widget(
+            ScreenHeader(title="Settings", on_back=lambda: self._go("home"))
         )
-        title.bind(size=lambda *_: setattr(title, "text_size", title.size))
-        header.add_widget(title)
-        root.add_widget(header)
 
         root.add_widget(
             PastelCard(

@@ -96,7 +96,7 @@ class FloatingNavBar(FloatLayout):
     """Dark floating pill: five equal slots + raised blue + centered on Camera."""
 
     active = StringProperty("home")
-    on_navigate = ObjectProperty(None, allownone=True)
+    navigate_cb = ObjectProperty(None, allownone=True)
 
     _ITEMS = (
         ("home", Icons.home, "Home"),
@@ -191,8 +191,8 @@ class FloatingNavBar(FloatLayout):
 
     def _tap(self, key: str):
         self.active = key
-        if callable(self.on_navigate):
-            self.on_navigate(key)
+        if callable(self.navigate_cb):
+            self.navigate_cb(key)
 
     def _sync_active(self, *_args):
         for key, widget in self._item_widgets.items():

@@ -48,6 +48,8 @@ class Spacing:
     lg = 24
     xl = 32
     screen_x = 22
+    screen_top = 16  # Top safe padding under status / notch
+    header_gap = 10  # Gap between back button and title
     grid_gap = 12
     nav_height = 64
     nav_margin = 18  # 16–20dp side inset
