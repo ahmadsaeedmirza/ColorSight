@@ -25,6 +25,12 @@ python -m unittest discover -s tests -v
 
 Requires NumPy + OpenCV (`opencv-python` or `opencv-python-headless`).
 
+### Vision Test notes (desktop)
+
+- First **Start test** generates 14 procedural plates (~1–3 s on a laptop); UI shows “Preparing plates…”.
+- Saved profile path: Kivy `user_data_dir` / `correction_profile.json` (see `colorsight.storage.profile_path`).
+- Plate artwork is original/procedural — do not replace with copyrighted Ishihara scans.
+
 ## Android packaging (Buildozer)
 
 Buildozer is typically run on **Linux** (or WSL2 / a CI Linux image). Native Windows Buildozer is not recommended.
@@ -107,6 +113,8 @@ Must ship with the APK:
 - [ ] Selected chips show white text on dark pills
 - [ ] Home / placeholder content scrolls clear of the nav bar
 - [ ] Orientation / safe areas look acceptable on the target phone
+- [ ] Vision Test completes (plates → hue → results) and Save profile writes JSON
+- [ ] Result disclaimer visible (screening ≠ diagnosis; screens vary)
 - [ ] (Phase 1) Camera permission prompt and preview
 - [ ] (Phase 1) Gallery pick + corrected image display
 

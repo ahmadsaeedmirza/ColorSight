@@ -4,6 +4,25 @@ Newest entries first. Append after every prompt per `rules.md`.
 
 ---
 
+## 2026-11-14 — Vision Test feature (plates, hue, scoring, results)
+
+**Prompt:** Build Color Vision Test on Test screen — procedural Ishihara-style plates (no copyrighted images), 12–16 plate flow with numpad + can't-see, hue-arrangement severity step, scoring in `/core`, pastel results with before/after + Save profile + medical disclaimer. Update docs.
+
+**Decisions:**
+- 14-plate `DEFAULT_BATTERY` in `core/plates.py` (control, RG, protan, deutan, blue-yellow palettes); circle packing + OpenCV digit masks.
+- Scoring in `core/scoring.py` → `TestResult` (normal / protanopia / deuteranopia / tritanopia + severity); hue MAD error blended into severity.
+- UI state machine in `test_screen.py` with `test_widgets` (ProgressBar, Numpad, HueStrip); profile via `CorrectionProfile` + `storage.profile_path()`.
+- Explicit result disclaimer: screening only; phone screens vary.
+- Spatial-hash packing so battery prep is ~2s at 360px.
+
+**Files:** `core/plates.py`, `core/scoring.py`, `core/__init__.py`, `tests/test_plates_scoring.py`, `colorsight/screens/test_screen.py`, `test_widgets.py`, `storage.py`, all `/docs`, `rules.md`.
+
+**Verified:** 27 unit tests OK; Test screen opens; battery gen ~2.4s.
+
+**Deferred:** Profile screen loader, photos/camera/lens wiring.
+
+---
+
 ## 2026-11-14 — Core color engine (`/core`) + unit tests
 
 **Prompt:** Build pure-Python color engine (no UI): Machado CVD simulation, daltonization/correction, `CorrectionProfile` JSON, vectorized `apply_*`, `name_color`, tests in `/tests`, document math in architecture, update all docs.

@@ -119,14 +119,25 @@ Apply the **same** clamped value to fill **and** matching shadow layers. Used by
 | `PillSearchBar` | Capsule search with Material `search` icon |
 | `FloatingNavBar` | Dark pill, equal slots, labels for all items, raised blue `add` FAB; fits width with side margins |
 | `PrimaryButton` / `RoundIconButton` | Filled CTA / circular icon button |
+| `ProgressBar` (test) | Thin capsule progress for plate flow |
+| `Numpad` (test) | Large digit pad + Can't see anything |
+| `HueStrip` (test) | Tap-to-swap hue tiles for arrangement step |
 
 ## Screen list
 
-| Screen id | Purpose (Phase 0) |
-|-----------|-------------------|
+| Screen id | Purpose |
+|-----------|---------|
 | `welcome` | Big title, subtitle, dark arrow CTA, stacked pastel feature cards |
-| `home` | Header (menu + avatar), chips, pastel feature grid (ScrollView + `nav_clearance`) |
-| `test` / `photos` / `camera` / `lens` / `profile` / `settings` | Placeholders with ScrollView + `nav_clearance` |
+| `home` | Header (menu + avatar), chips, pastel feature grid |
+| `test` | **Vision test** — intro → 14 plates → hue arrange → results (Save profile) |
+| `photos` / `camera` / `lens` / `profile` / `settings` | Placeholders (Phase 1 remaining) |
+
+### Test screen recipe
+
+- Pastel intro cards (yellow / mint) with screening disclaimer  
+- One plate image per step + Lexend prompts + dark/light numpad keys  
+- Progress capsule under “Plate N of 14”  
+- Results: peach/mint result card, yellow medical disclaimer card, before/after demo strip, blue **Save my profile** CTA
 
 ## Layout recipes
 

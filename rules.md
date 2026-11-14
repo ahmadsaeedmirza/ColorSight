@@ -24,7 +24,9 @@ This is not optional. Documentation is part of the deliverable, not an afterthou
 
 - Prefer pure **Kivy** for UI. Use **KivyMD** only when it clearly reduces custom work without fighting the pastel design system.
 - Keep feature logic out of screen layout files when possible (separate modules under `colorsight/`).
-- **Color math belongs in `/core`** (NumPy/OpenCV, no Kivy). UI screens import `core` — do not duplicate Machado/daltonize/naming in widgets.
+- **Color math belongs in `/core`** (NumPy/OpenCV, no Kivy). UI screens import `core` — do not duplicate Machado/daltonize/naming/plates/scoring in widgets.
+- **Ishihara-style plates must be procedural/original** — never ship or scrape copyrighted Ishihara plate images.
+- **Vision Test results** must keep a clear screening disclaimer (not a medical diagnosis; display variation).
 - Desktop-first during development: `python main.py` must keep working; `python -m unittest discover -s tests` must stay green when touching `/core`.
 - Do not implement Phase 2 (system-wide color filter / Shizuku) until Phase 1 is complete and explicitly requested.
 - **Icons:** use `colorsight.widgets.Icon` + Material Icons ligatures — never Lexend/emoji for chrome icons.
