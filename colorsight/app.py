@@ -53,10 +53,7 @@ class RootShell(FloatLayout):
         self.sm.bind(current=self._on_screen)
         self.add_widget(self.sm)
 
-        self.nav = FloatingNavBar(
-            size_hint=(None, None),
-            height=dp(Spacing.nav_height),
-        )
+        self.nav = FloatingNavBar()
         self.nav.on_navigate = self._navigate
         self.add_widget(self.nav)
         self.bind(size=self._place_nav)
@@ -68,10 +65,11 @@ class RootShell(FloatLayout):
         self._bg.size = self.size
 
     def _place_nav(self, *_args):
-        margin = dp(Spacing.nav_margin)
-        self.nav.width = self.width - margin * 2
+        margin = dp(Spacing.nav_margin)  # 16–20dp side inset
+        self.nav.width = max(0, self.width - margin * 2)
         self.nav.x = self.x + margin
         self.nav.y = self.y + margin
+        # Height owned by FloatingNavBar (pill + raised FAB)
 
     def _on_screen(self, _sm, name):
         show_nav = name in self.NAV_SCREENS and name != "welcome"

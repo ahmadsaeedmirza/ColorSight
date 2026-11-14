@@ -6,6 +6,7 @@ from kivy.metrics import dp
 from kivy.properties import BooleanProperty, ColorProperty, ListProperty, NumericProperty
 from kivy.uix.boxlayout import BoxLayout
 
+from colorsight.theme.geometry import clamped_radii
 from colorsight.theme.tokens import Colors, Radii
 
 
@@ -33,6 +34,7 @@ class RoundedCard(BoxLayout):
 
     def _redraw(self, *_args):
         self.canvas.before.clear()
+        radii = clamped_radii(dp(self.radius), self.width, self.height)
         with self.canvas.before:
             Color(*self.shadow_color)
             RoundedRectangle(
@@ -41,13 +43,13 @@ class RoundedCard(BoxLayout):
                     self.y + dp(self.shadow_offset[1]) - dp(2),
                 ),
                 size=(self.width, self.height),
-                radius=[dp(self.radius)],
+                radius=radii,
             )
             Color(*self.card_color)
             RoundedRectangle(
                 pos=self.pos,
                 size=self.size,
-                radius=[dp(self.radius)],
+                radius=radii,
             )
 
     def on_touch_down(self, touch):

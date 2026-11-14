@@ -9,8 +9,8 @@ from kivy.uix.scrollview import ScrollView
 from kivy.uix.widget import Widget
 from kivy.graphics import Color, Ellipse
 
-from colorsight.theme.tokens import Colors, Fonts, Spacing
-from colorsight.widgets import ChipRow, PastelCard, PillSearchBar
+from colorsight.theme.tokens import Colors, Fonts, Icons, Spacing
+from colorsight.widgets import ChipRow, Icon, PastelCard, PillSearchBar
 
 
 class _Avatar(Widget):
@@ -18,32 +18,24 @@ class _Avatar(Widget):
         super().__init__(**kwargs)
         self.size_hint = (None, None)
         self.size = (dp(40), dp(40))
+        self._icon = Icon(
+            icon=Icons.profile,
+            icon_size=22,
+            color=(1, 1, 1, 1),
+            size_hint=(None, None),
+            size=(dp(40), dp(40)),
+        )
+        self.add_widget(self._icon)
         self.bind(pos=self._draw, size=self._draw)
         self._draw()
 
     def _draw(self, *_args):
-        self.canvas.clear()
-        with self.canvas:
+        self.canvas.before.clear()
+        with self.canvas.before:
             Color(*Colors.accent_blue)
             Ellipse(pos=self.pos, size=self.size)
-            Color(1, 1, 1, 1)
-            # simple face mark
-            r = dp(4)
-            Ellipse(pos=(self.center_x - dp(8) - r / 2, self.center_y + dp(2)), size=(r, r))
-            Ellipse(pos=(self.center_x + dp(8) - r / 2, self.center_y + dp(2)), size=(r, r))
-
-
-class _MenuIcon(Label):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.text = "☰"
-        self.font_size = dp(22)
-        self.color = Colors.text
-        self.size_hint = (None, None)
-        self.size = (dp(40), dp(40))
-        self.halign = "center"
-        self.valign = "middle"
-        self.bind(size=lambda *_: setattr(self, "text_size", self.size))
+        self._icon.pos = self.pos
+        self._icon.size = self.size
 
 
 class HomeScreen(Screen):
@@ -56,8 +48,6 @@ class HomeScreen(Screen):
             if self.manager:
                 self.manager.transition.direction = "left"
                 self.manager.current = screen_name
-                app = self.get_root_window()
-                # notify app nav via screen change; FloatingNavBar syncs in app
                 if hasattr(self.manager.parent, "set_nav_active"):
                     self.manager.parent.set_nav_active(screen_name)
 
@@ -78,7 +68,12 @@ class HomeScreen(Screen):
         scroll = ScrollView(do_scroll_x=False, bar_width=0)
         content = BoxLayout(
             orientation="vertical",
-            padding=[dp(Spacing.screen_x), dp(Spacing.lg), dp(Spacing.screen_x), dp(110)],
+            padding=[
+                dp(Spacing.screen_x),
+                dp(Spacing.lg),
+                dp(Spacing.screen_x),
+                dp(Spacing.nav_clearance),
+            ],
             spacing=dp(Spacing.md),
             size_hint_y=None,
         )
@@ -89,7 +84,14 @@ class HomeScreen(Screen):
             size_hint_y=None,
             height=dp(44),
         )
-        header.add_widget(_MenuIcon())
+        menu = Icon(
+            icon=Icons.menu,
+            icon_size=26,
+            color=Colors.text,
+            size_hint=(None, None),
+            size=(dp(40), dp(40)),
+        )
+        header.add_widget(menu)
         header.add_widget(Widget())
         header.add_widget(_Avatar())
         content.add_widget(header)
@@ -113,13 +115,6 @@ class HomeScreen(Screen):
         chips.on_change = self._on_chip
         content.add_widget(chips)
 
-        grid = GridLayout(
-            cols=2,
-            spacing=dp(Spacing.grid_gap),
-            size_hint_y=None,
-            height=dp(420),
-        )
-
         features = [
             ("Vision Test", "Ishihara-style check", "yellow", "test", 150),
             ("Photos", "Fix gallery colors", "pink", "photos", 150),
@@ -128,9 +123,13 @@ class HomeScreen(Screen):
             ("Profile", "Your correction", "peach", "profile", 150),
             ("Settings", "Preferences", "lavender", "settings", 150),
         ]
-        # two-column: compute total height from rows
         row_h = [150, 170, 150]
-        grid.height = dp(sum(row_h) + Spacing.grid_gap * 2)
+        grid = GridLayout(
+            cols=2,
+            spacing=dp(Spacing.grid_gap),
+            size_hint_y=None,
+            height=dp(sum(row_h) + Spacing.grid_gap * 2),
+        )
 
         for title, sub, palette, screen, h in features:
             card = PastelCard(

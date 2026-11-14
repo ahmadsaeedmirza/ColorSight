@@ -7,6 +7,7 @@
 - ScreenManager shell: Welcome, Home, and placeholders
 - Desktop run via `python main.py`
 - Buildozer scaffolding + production notes (no feature pipelines yet)
+- **Shell polish:** Material Icons set, radius clamping for true pills, chip contrast, floating nav fit + raised FAB, ScrollView/`nav_clearance` so content clears the nav
 
 ## Phase 1 — Color vision assist (in-app)
 

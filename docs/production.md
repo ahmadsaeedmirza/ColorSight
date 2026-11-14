@@ -14,7 +14,7 @@ pip install -r requirements.txt
 python main.py
 ```
 
-Window size defaults to a phone-like portrait frame for layout checks. Resize is allowed; screens should remain usable.
+Window size defaults to a phone-like portrait frame for layout checks (OS DPI may scale the actual pixel size). Resize is allowed; screens should remain usable.
 
 ## Android packaging (Buildozer)
 
@@ -75,12 +75,28 @@ Declared in `buildozer.spec` / AndroidManifest (via Buildozer):
 
 Phase 0 shell does not request runtime camera/storage usage yet; declare early so packaging is ready.
 
+## Asset packaging (fonts & icons)
+
+Must ship with the APK:
+
+| Path | License | Notes |
+|------|---------|-------|
+| `assets/fonts/Lexend-*.ttf` | OFL (`assets/fonts/OFL.txt`) | UI typeface |
+| `assets/icons/MaterialIcons-Regular.ttf` | Apache 2.0 (`assets/icons/LICENSE.txt`) | Ligature icons |
+
+`buildozer.spec`:
+
+- `source.include_exts` includes `ttf`, `otf`, `txt`, `md`
+- `source.include_patterns` includes `assets/*`, `assets/fonts/*`, `assets/icons/*`
+
 ## Testing checklist (device)
 
 - [ ] App installs and opens without crash
 - [ ] Welcome → Home navigation works
-- [ ] Floating bottom nav switches screens
-- [ ] Fonts (Lexend) render (no fallback-only look)
+- [ ] Floating bottom nav fits width (side margins), switches screens, FAB raised and tappable
+- [ ] Lexend fonts + Material Icons render (no empty boxes)
+- [ ] Selected chips show white text on dark pills
+- [ ] Home / placeholder content scrolls clear of the nav bar
 - [ ] Orientation / safe areas look acceptable on the target phone
 - [ ] (Phase 1) Camera permission prompt and preview
 - [ ] (Phase 1) Gallery pick + corrected image display
@@ -90,7 +106,7 @@ Phase 0 shell does not request runtime camera/storage usage yet; declare early s
 - **Buildozer on Windows**: prefer WSL2 or a Linux VM; expect long first builds (NDK/SDK download).
 - **Python 3.13**: confirm Kivy wheel availability for your OS; if desktop install fails, use 3.11/3.12 in the venv.
 - **Kivy camera on desktop** differs from Android `Camera` / `Camera2` providers — Phase 1 must test live feed on-device.
-- **Font packaging**: `assets/fonts/*.ttf` must be listed in Buildozer `source.include_exts` (`.ttf` included in spec).
+- **Radius 999**: never pass unclamped into `RoundedRectangle` — use `clamp_radius` (see `design.md`).
 - Soft shadows are approximated with layered rounded rects; they will not match Material elevation exactly.
 
 ## `buildozer.spec` highlights
@@ -99,3 +115,4 @@ Phase 0 shell does not request runtime camera/storage usage yet; declare early s
 - Orientation: portrait
 - Requirements: `python3,kivy,numpy,opencv` (OpenCV Android recipe may need pinning — verify on first real build)
 - Permissions: camera + storage as above
+- Icons + fonts included via `assets/**` patterns

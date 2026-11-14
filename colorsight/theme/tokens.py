@@ -7,7 +7,7 @@ class Colors:
     text = (0.110, 0.110, 0.110, 1)  # #1C1C1C
     text_muted = (0.420, 0.420, 0.420, 1)  # #6B6B6B
     nav_bg = (0.118, 0.118, 0.118, 1)  # #1E1E1E
-    nav_icon = (0.961, 0.961, 0.961, 1)
+    nav_icon = (0.75, 0.75, 0.75, 1)
     nav_icon_active = (1, 1, 1, 1)
     accent_blue = (0.298, 0.553, 1.0, 1)  # #4C8DFF
     accent_dark = (0.118, 0.118, 0.118, 1)
@@ -16,7 +16,7 @@ class Colors:
     chip_selected_text = (1, 1, 1, 1)
     chip_bg = (1, 1, 1, 1)
     chip_text = (0.110, 0.110, 0.110, 1)
-    chip_border = (0.90, 0.88, 0.86, 1)
+    chip_border = (0.88, 0.86, 0.84, 1)
     divider = (0.90, 0.88, 0.86, 1)
 
 
@@ -34,7 +34,7 @@ PASTEL_PALETTE = {
 class Radii:
     card = 24
     card_lg = 28
-    chip = 999
+    chip = 999  # design intent: pill — always clamp via clamp_radius()
     button = 22
     fab = 999
     search = 999
@@ -50,7 +50,11 @@ class Spacing:
     screen_x = 22
     grid_gap = 12
     nav_height = 64
-    nav_margin = 18
+    nav_margin = 18  # 16–20dp side inset
+    nav_fab_size = 52
+    nav_fab_raise = 12
+    # Bottom content inset so scroll areas clear the floating nav (+ raised FAB)
+    nav_clearance = 120
 
 
 class Fonts:
@@ -58,3 +62,20 @@ class Fonts:
     medium = "LexendMedium"
     semibold = "LexendSemiBold"
     bold = "LexendBold"
+    icons = "MaterialIcons"
+
+
+class Icons:
+    """Material Icons ligature names used in the shell."""
+
+    menu = "menu"
+    search = "search"
+    home = "home"
+    photos = "photo_library"
+    camera = "photo_camera"
+    lens = "loupe"
+    profile = "person"
+    settings = "settings"
+    add = "add"
+    arrow_forward = "arrow_forward"
+    arrow_back = "arrow_back"

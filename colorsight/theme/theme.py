@@ -1,4 +1,4 @@
-"""Font registration and theme helpers."""
+"""Font / icon registration and theme helpers."""
 
 from pathlib import Path
 
@@ -6,7 +6,9 @@ from kivy.core.text import LabelBase
 
 from .tokens import Fonts
 
-_FONTS_DIR = Path(__file__).resolve().parents[2] / "assets" / "fonts"
+_ROOT = Path(__file__).resolve().parents[2]
+_FONTS_DIR = _ROOT / "assets" / "fonts"
+_ICONS_DIR = _ROOT / "assets" / "icons"
 _registered = False
 
 
@@ -30,6 +32,10 @@ def register_fonts() -> None:
         name=Fonts.bold,
         fn_regular=str(_FONTS_DIR / "Lexend-Bold.ttf"),
     )
+    LabelBase.register(
+        name=Fonts.icons,
+        fn_regular=str(_ICONS_DIR / "MaterialIcons-Regular.ttf"),
+    )
     _registered = True
 
 
@@ -39,4 +45,5 @@ def font_name(weight: str = "regular") -> str:
         "medium": Fonts.medium,
         "semibold": Fonts.semibold,
         "bold": Fonts.bold,
+        "icons": Fonts.icons,
     }.get(weight, Fonts.regular)

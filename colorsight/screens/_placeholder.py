@@ -4,10 +4,11 @@ from kivy.metrics import dp
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.label import Label
 from kivy.uix.screenmanager import Screen
+from kivy.uix.scrollview import ScrollView
 from kivy.uix.widget import Widget
 
-from colorsight.theme.tokens import Colors, Fonts, Spacing
-from colorsight.widgets import PastelCard
+from colorsight.theme.tokens import Colors, Fonts, Icons, Spacing
+from colorsight.widgets import PastelCard, RoundIconButton
 
 
 class PlaceholderScreen(Screen):
@@ -29,38 +30,31 @@ class PlaceholderScreen(Screen):
         self._show_back = show_back
         self._build()
 
+    def _go_back(self, *_a):
+        if self.manager:
+            self.manager.current = "home"
+
     def _build(self):
+        scroll = ScrollView(do_scroll_x=False, bar_width=0)
         root = BoxLayout(
             orientation="vertical",
-            padding=[dp(Spacing.screen_x), dp(Spacing.lg), dp(Spacing.screen_x), dp(100)],
+            padding=[
+                dp(Spacing.screen_x),
+                dp(Spacing.lg),
+                dp(Spacing.screen_x),
+                dp(Spacing.nav_clearance),
+            ],
             spacing=dp(Spacing.md),
+            size_hint_y=None,
         )
+        root.bind(minimum_height=root.setter("height"))
 
-        header = BoxLayout(orientation="horizontal", size_hint_y=None, height=dp(40))
+        header = BoxLayout(orientation="horizontal", size_hint_y=None, height=dp(44))
         if self._show_back:
-            back = Label(
-                text="‹ Back",
-                font_name=Fonts.medium,
-                font_size=dp(16),
-                color=Colors.text,
-                halign="left",
-                valign="middle",
-                size_hint_x=None,
-                width=dp(90),
-            )
-            back.bind(size=lambda *_: setattr(back, "text_size", back.size))
-
-            def _go_back(*_a):
-                if self.manager:
-                    self.manager.current = "home"
-
-            # tap via ButtonBehavior would be better; use a PastelCard-less simple approach
-            from colorsight.widgets.primary_button import RoundIconButton
-
-            btn = RoundIconButton(icon="‹", diameter=40)
+            btn = RoundIconButton(icon=Icons.arrow_back, diameter=40)
             btn.bg_color = Colors.surface
             btn.icon_color = Colors.text
-            btn.on_press_cb = lambda *_: _go_back()
+            btn.on_press_cb = self._go_back
             header.add_widget(btn)
         header.add_widget(Widget())
         root.add_widget(header)
@@ -87,5 +81,6 @@ class PlaceholderScreen(Screen):
             interactive=False,
         )
         root.add_widget(card)
-        root.add_widget(Widget())
-        self.add_widget(root)
+        root.add_widget(Widget(size_hint_y=None, height=dp(24)))
+        scroll.add_widget(root)
+        self.add_widget(scroll)

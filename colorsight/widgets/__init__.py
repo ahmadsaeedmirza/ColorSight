@@ -4,6 +4,7 @@ from .chip import Chip, ChipRow
 from .pill_search_bar import PillSearchBar
 from .floating_nav_bar import FloatingNavBar
 from .primary_button import PrimaryButton, RoundIconButton
+from .icon import Icon
 
 __all__ = [
     "RoundedCard",
@@ -14,4 +15,5 @@ __all__ = [
     "FloatingNavBar",
     "PrimaryButton",
     "RoundIconButton",
+    "Icon",
 ]

@@ -7,6 +7,7 @@
 | **Python 3** | App language | Course/project fit; strong NumPy/OpenCV ecosystem for color vision work |
 | **Kivy** | UI framework | Cross-platform (desktop + Android via Buildozer); flexible canvas for custom pastel UI |
 | **KivyMD** | *Not used (Phase 0)* | Material defaults fight the pastel notes look; pure Kivy + custom widgets is cleaner |
+| **Material Icons TTF** | UI icons | Lexend has no icon glyphs; ligature font keeps icons vector-sharp and consistent |
 | **NumPy** | Array math | Fast color transforms, matrix ops for correction profiles (Phase 1) |
 | **OpenCV** | Image / camera | Capture, resize, color-space conversion, live frame pipelines |
 | **Buildozer** | Android packaging | Standard Kivy → APK/AAB path; permissions and recipe management |
@@ -15,55 +16,48 @@
 
 ```
 ColorSight/
-├── main.py                 # Entry point (desktop + Android)
+├── main.py
 ├── requirements.txt
-├── buildozer.spec          # Android packaging config
-├── rules.md                # Mandatory docs + scope rules
-├── docs/                   # Living documentation (always update)
-│   ├── architecture.md
-│   ├── production.md
-│   ├── design.md
-│   ├── phases.md
-│   └── memory.md
+├── buildozer.spec
+├── rules.md
+├── docs/
 ├── assets/
-│   └── fonts/              # Bundled Lexend TTFs
+│   ├── fonts/              # Lexend TTFs + OFL
+│   └── icons/              # MaterialIcons-Regular.ttf + Apache LICENSE
 └── colorsight/
-    ├── __init__.py
-    ├── app.py              # ColorSightApp + ScreenManager wiring
+    ├── app.py              # ColorSightApp + RootShell (SM + FloatingNavBar)
     ├── theme/
-    │   ├── tokens.py       # Design tokens (colors, radii, spacing, fonts)
-    │   └── theme.py        # Font registration + KV helpers
-    ├── widgets/            # Reusable UI components
+    │   ├── tokens.py       # Colors, Radii, Spacing, Fonts, Icons
+    │   ├── theme.py        # register_fonts() — Lexend + Material Icons
+    │   └── geometry.py     # clamp_radius / clamped_radii
+    ├── widgets/
+    │   ├── icon.py         # Icon helper (Material ligatures)
     │   ├── rounded_card.py
     │   ├── pastel_card.py
     │   ├── chip.py
     │   ├── pill_search_bar.py
     │   ├── floating_nav_bar.py
     │   └── primary_button.py
-    └── screens/            # ScreenManager screens (shell placeholders)
+    └── screens/
         ├── welcome.py
         ├── home.py
-        ├── test_screen.py
-        ├── photos.py
-        ├── camera.py
-        ├── lens.py
-        ├── profile.py
-        └── settings.py
+        ├── _placeholder.py
+        └── test / photos / camera / lens / profile / settings
 ```
 
 ## Modules (current)
 
-- **`colorsight.app`** — Application class; builds `ScreenManager`, registers screens, owns root layout with floating nav.
-- **`colorsight.theme`** — Single source of truth for visual tokens; registers Lexend with Kivy’s `LabelBase`.
-- **`colorsight.widgets`** — Design-system components used by screens (cards, chips, nav, buttons).
-- **`colorsight.screens`** — One module per screen; Phase 0 = layout + navigation only.
+- **`colorsight.app`** — `RootShell` hosts `ScreenManager` + floating nav (hidden on `welcome`); nav width = screen − 2×`nav_margin`.
+- **`colorsight.theme`** — Tokens, font/icon registration, geometry clamping.
+- **`colorsight.widgets`** — Design-system components including `Icon`.
+- **`colorsight.screens`** — Shell screens; nav-visible screens use ScrollView + `Spacing.nav_clearance` bottom padding.
 
 ## Data flow (Phase 0 shell)
 
 ```
 main.py
   └─ ColorSightApp.build()
-       ├─ register_fonts()
+       ├─ register_fonts()  # Lexend + Material Icons
        ├─ ScreenManager
        │    ├─ welcome → home (CTA)
        │    ├─ home ↔ test / photos / camera / lens / profile / settings
@@ -71,23 +65,11 @@ main.py
        └─ (Phase 1 later) correction profile → image/camera pipelines
 ```
 
-No correction profiles, camera frames, or color naming yet — shell only.
-
-## Planned Phase 1 data flow (not implemented)
-
-```
-Vision test results → CorrectionProfile (params)
-        ↓
-  Image picker / Camera feed / Magnifier sample
-        ↓
-  NumPy/OpenCV color transform
-        ↓
-  Display + optional simulation view + named color under lens
-```
-
 ## Design decisions
 
-1. **Pure Kivy over KivyMD** for Phase 0 so pastel cards, floating pill nav, and soft shadows match the reference notes-app look.
-2. **Tokens in Python** (`tokens.py`) rather than only KV — easier to share between widgets and docs.
-3. **Screen names are stable IDs** (`welcome`, `home`, `test`, …) so nav and future deep-links stay consistent.
-4. **Desktop-first** — validate UI with `python main.py` before Buildozer cycles.
+1. **Pure Kivy over KivyMD** for pastel cards + floating pill nav.
+2. **Material Icons font** (not emoji / Lexend) for all chrome icons.
+3. **Clamp every canvas radius** with `min(r, w/2, h/2)` so pills are capsules.
+4. **Tokens in Python** (`tokens.py`) shared by widgets and docs.
+5. **Stable screen ids** for nav and future deep-links.
+6. **Desktop-first** — `python main.py` before Buildozer cycles.

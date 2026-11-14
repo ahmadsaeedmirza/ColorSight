@@ -7,7 +7,7 @@ from kivy.uix.screenmanager import Screen
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.widget import Widget
 
-from colorsight.theme.tokens import Colors, Fonts, Radii, Spacing
+from colorsight.theme.tokens import Colors, Fonts, Icons, Radii, Spacing
 from colorsight.widgets import PastelCard, RoundIconButton
 
 
@@ -33,7 +33,12 @@ class WelcomeScreen(Screen):
         scroll = ScrollView(do_scroll_x=False, bar_width=0)
         content = BoxLayout(
             orientation="vertical",
-            padding=[dp(Spacing.screen_x), dp(Spacing.xl), dp(Spacing.screen_x), dp(Spacing.xl)],
+            padding=[
+                dp(Spacing.screen_x),
+                dp(Spacing.xl),
+                dp(Spacing.screen_x),
+                dp(Spacing.xl),
+            ],
             spacing=dp(Spacing.md),
             size_hint_y=None,
         )
@@ -74,7 +79,7 @@ class WelcomeScreen(Screen):
             spacing=dp(Spacing.md),
         )
         cta_row.add_widget(Widget())
-        arrow = RoundIconButton(icon="→", diameter=56)
+        arrow = RoundIconButton(icon=Icons.arrow_forward, diameter=56)
         arrow.on_press_cb = self._go_home
         cta_row.add_widget(arrow)
         content.add_widget(cta_row)
