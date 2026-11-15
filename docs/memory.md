@@ -4,6 +4,18 @@ Newest entries first. Append after every prompt per `rules.md`.
 
 ---
 
+## 2026-11-15 — Android CI preflight guardrails
+
+**Prompt:** Stop cloud builds failing for avoidable reasons. No `/core` / vision-test / app behavior / existing-test changes.
+
+**Added:** `tools/preflight.py` (spec/pins/arch/ndk/api/permissions/assets/hooks/constraints, CRLF, compileall, Kivy pitfalls, fonts/includes; warns android-wheel risks). `tools/run_unit_tests.py` skips GUI modules when `COLORSIGHT_SKIP_GUI=1`. `.gitattributes` forces LF. `tools/build_android.sh` runs preflight first.
+
+**Workflow:** `preflight` job (Py 3.11) → `build` `needs: preflight`; concurrency cancel; cache `buildozer-v2-<hash(spec+constraints+camerax_provider/**)>` never venv; `clean_cache` dispatch input; logs + APK `if: always()`; file-based packaging greps; `GITHUB_STEP_SUMMARY`; actions → checkout/setup-python/cache/upload@v7, setup-java@v6 (Node 24).
+
+**Docs:** production “Before you push” + pitfalls table; rules; this entry.
+
+---
+
 ## 2026-11-15 — Android runtime: picker, Lens crash, GPU camera
 
 **Prompt:** Three real-phone fixes — Photos picker no-op; Lens nav crash; smooth camera via GPU. No `/core` / staircase / scoring / existing-test edits. Build safety: unpinned reqs + add pure-Python `androidstorage4kivy` only; no PIP_CONSTRAINT/api/ndk/archs changes; no CRLF in .sh/.spec/.yml/.py.

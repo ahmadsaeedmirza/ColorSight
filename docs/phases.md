@@ -17,6 +17,7 @@
 | Plate generator (legacy) — kept + tested, not in live UI | Done |
 | Trivector core + calibration tests | Done |
 | **Photos** — androidstorage4kivy Chooser (+ legacy picker fallback), Corrected@0% divider, Strength, SharedStorage/MediaStore save, FileProvider share, comparison | Done |
+| **CI preflight** — `tools/preflight.py` + GHA `preflight` job before Buildozer | Done |
 | **Camera** — live OpenCV (desktop) / Camera4Kivy+CameraX (Android), freeze/capture, no silent fake | Done |
 | **Lens** — Camera loupe state (post-transition enable) + `name_color` on original ~5 Hz; GPU live preview | Done |
 | **Theme rebuild + safe insets + Vision Test tutorial** | Done |

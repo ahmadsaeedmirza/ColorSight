@@ -1,5 +1,34 @@
 # Production — Build & device testing
 
+## Before you push (Android / cloud build)
+
+Run these **before** pushing to `build-apk` or triggering **Android APK**:
+
+```bash
+# From project root (venv active)
+python tools/preflight.py
+python tools/run_unit_tests.py          # or: COLORSIGHT_SKIP_GUI=1 for CI-like
+# Full suite including GUI tests (needs display / Kivy Window):
+# python -m unittest discover -s tests -v
+```
+
+Then push / dispatch the workflow. Mistakes that used to cost a 30–90 minute Buildozer run now fail in the **`preflight`** job (~2 minutes).
+
+### Avoided pitfalls (why preflight exists)
+
+| Pitfall | What goes wrong | Guard |
+|---------|-----------------|-------|
+| Duplicate `version` / `version.regex` + `version.filename` | Buildozer “version defined in two places” | preflight: exactly one `version =` |
+| Pinned `requirements=` (`kivy==…`) | p4a / Python 3.14 resolve failures | preflight: no `==` in requirements |
+| Missing `charset-normalizer` constraint | Host pip grabs `android_*` wheel → install fail | `constraints.txt` + `PIP_CONSTRAINT`; preflight checks file |
+| Stale `.buildozer/.../build/venv` | `ImportError: capture_logging` | CI + `build_android.sh` delete venv; never cache it |
+| Wrong NDK / arch | NumPy / CameraX break | `android.ndk=28c`, `android.archs=arm64-v8a` only |
+| CRLF in `.py` / `.sh` / `.yml` / `.spec` | Hooks / shell / p4a misparse | `.gitattributes` + preflight CRLF scan |
+| `echo \| grep` under `pipefail` | False packaging-check failure | File-based greps only |
+| Custom widget named like a Kivy builtin / `size=dp(n)` / `on_*` props | Runtime crash on device | preflight Kivy pitfalls |
+
+Local WSL builds also run preflight via `tools/build_android.sh`.
+
 ## Desktop run (primary during Phase 0)
 
 ```bash
@@ -122,14 +151,16 @@ Build the debug APK in the cloud so you do **not** need a local Buildozer/WSL to
 
 ### Run the workflow
 
-1. Push this repo to GitHub (private is fine) under **ahmadsaeedmirza**.
-2. Open **Actions → Android APK**.
-3. Either:
-   - **Run workflow** (`workflow_dispatch`), or
+1. Run **`python tools/preflight.py`** locally (see **Before you push** above).
+2. Push this repo to GitHub (private is fine) under **ahmadsaeedmirza**.
+3. Open **Actions → Android APK**.
+4. Either:
+   - **Run workflow** (`workflow_dispatch`; optional **`clean_cache`** to skip cache restore), or
    - Push any commit to a branch named **`build-apk`**.
-4. Wait for the job (first run can take **1–3+ hours**; later runs reuse `~/.buildozer` + `./.buildozer` under cache key **`buildozer-v2-`**, excluding `build/venv`).
+5. **`preflight`** job (Python 3.11, ~2 min) runs `tools/preflight.py` + non-GUI unit tests (`COLORSIGHT_SKIP_GUI=1`). **`build`** only starts if preflight passes (`needs: preflight`).
+6. Build can take **1–3+ hours** cold; later runs reuse `~/.buildozer` + `./.buildozer` under cache key **`buildozer-v2-<hash of buildozer.spec + constraints.txt + camerax_provider/**>`**, excluding `build/venv`. Concurrency cancels an older run on the same branch.
 
-Workflow file: `.github/workflows/android.yml` (ubuntu-22.04, Java 17, `cython==0.29.36`, `buildozer -v android debug`, timeout 360 min). Before each build the job deletes `build/venv` so p4a cannot corrupt pip. The APK artifact uploads with **`if: always()`** whenever `bin/*.apk` exists (a failed packaging check must not hide a built APK). After a successful build it **verifies FileProvider + CAMERA + CameraX** by writing dumps to files and grepping those files (never `echo | grep` under `pipefail` — that caused a false CameraX failure on run #4).
+Workflow file: `.github/workflows/android.yml` (ubuntu-22.04, Java 17, Node-24 action majors, `cython==0.29.36`, `buildozer -v android debug`, timeout 360 min). Before each build the job deletes `build/venv` so p4a cannot corrupt pip. The APK + build logs upload with **`if: always()`** when present. Packaging checks write dumps to files then grep those files (never `echo | grep` under `pipefail`). Job summary (`GITHUB_STEP_SUMMARY`) lists APK name/size, api/ndk/arch, and FileProvider / CAMERA / CameraX results.
 
 ### Download the APK
 
@@ -158,9 +189,10 @@ Sim: **540×1200** at **`KIVY_METRICS_DENSITY=1.375`**, with debug insets **`COL
 
 ### If the build fails
 
-1. Open the failed run → **Artifacts** → download **`colorsight-build-failure-log`** (last **1500** lines) and/or **`colorsight-build-full-log`** (full `buildozer-ci.log`, 3-day retention).
-2. Match the error to the troubleshooting table below (FreeType, NDK, `PIP_CONSTRAINT` / charset-normalizer, pins).
-3. Fix `constraints.txt` / `buildozer.spec` / workflow as needed, push, and re-run (cache makes reruns faster).
+1. If **preflight** failed: read the job log (seconds, not hours) — fix `buildozer.spec` / CRLF / assets / unit tests, then re-run.
+2. If **build** failed: **Artifacts** → **`colorsight-build-logs`** (tail + full `buildozer-ci.log`, always uploaded when present).
+3. Match the error to the troubleshooting table below (FreeType, NDK, `PIP_CONSTRAINT` / charset-normalizer, pins).
+4. Fix `constraints.txt` / `buildozer.spec` / workflow as needed, push, and re-run (`clean_cache` if the cache itself is poisoned).
 
 ### Known cloud / Buildozer pitfalls
 

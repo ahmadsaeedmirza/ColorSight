@@ -11,6 +11,17 @@ mkdir -p dist
 echo "==> ColorSight Android debug build"
 echo "    project: $ROOT"
 
+# Fast guardrails (CRLF, pins, assets, Kivy pitfalls) — fail before a long build
+echo "==> Preflight"
+if command -v python3 >/dev/null 2>&1; then
+  python3 tools/preflight.py
+elif command -v python >/dev/null 2>&1; then
+  python tools/preflight.py
+else
+  echo "ERROR: python3/python not found for preflight"
+  exit 1
+fi
+
 if ! command -v buildozer >/dev/null 2>&1; then
   echo "ERROR: buildozer not found. Install with: pip3 install --user buildozer cython"
   exit 1

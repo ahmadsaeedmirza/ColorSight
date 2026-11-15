@@ -3,6 +3,11 @@ name: Android APK
 
 on:
   workflow_dispatch:
+    inputs:
+      clean_cache:
+        description: Skip Buildozer cache restore (force cold deps)
+        type: boolean
+        default: false
   push:
     branches:
       - build-apk
@@ -12,13 +17,50 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  preflight:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Install preflight deps
+        run: |
+          python -m pip install --upgrade pip
+          # Kivy for Factory name checks; NumPy for non-GUI unit tests
+          python -m pip install "kivy" "numpy" "pillow"
+
+      - name: Run preflight
+        run: python tools/preflight.py
+
+      - name: Non-GUI unit tests
+        env:
+          COLORSIGHT_SKIP_GUI: "1"
+          KIVY_NO_ARGS: "1"
+        run: python tools/run_unit_tests.py
+
+      - name: Preflight summary
+        if: always()
+        run: |
+          {
+            echo "## Preflight"
+            echo "- preflight.py + non-GUI unit tests (COLORSIGHT_SKIP_GUI=1)"
+            echo "- Python: 3.11"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   build:
+    needs: preflight
     runs-on: ubuntu-22.04
     timeout-minutes: 360
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Free disk space
         run: |
@@ -36,13 +78,13 @@ jobs:
           df -h
 
       - name: Set up Java 17
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "17"
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: "3.11"
 
@@ -62,16 +104,22 @@ jobs:
           python -m pip install "buildozer" "cython==0.29.36"
 
       - name: Cache Buildozer / p4a
-        uses: actions/cache@v5
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.clean_cache != true }}
+        uses: actions/cache@v6
         with:
           path: |
             ~/.buildozer
             ./.buildozer
             !.buildozer/android/platform/build-*/build/venv
           # v2: never restore/save poisoned p4a build/venv (pip capture_logging crash)
-          key: buildozer-v2-${{ runner.os }}-${{ hashFiles('buildozer.spec', 'constraints.txt') }}
+          # Include camerax_provider so CameraX hook changes bust the cache.
+          key: buildozer-v2-${{ runner.os }}-${{ hashFiles('buildozer.spec', 'constraints.txt', 'camerax_provider/**') }}
           restore-keys: |
             buildozer-v2-${{ runner.os }}-
+
+      - name: Note clean_cache
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.clean_cache == true }}
+        run: echo "clean_cache=true — skipped Buildozer cache restore"
 
       - name: Show PIP_CONSTRAINT
         run: |
@@ -102,13 +150,14 @@ jobs:
       # Upload even if the packaging check fails so a built APK is never hidden.
       - name: Upload APK
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: colorsight-apk
           path: bin/*.apk
           if-no-files-found: ignore
 
       - name: Verify FileProvider + Camera in APK
+        id: verify
         if: success()
         run: |
           set -euo pipefail
@@ -116,10 +165,14 @@ jobs:
           apks=(bin/*.apk)
           if [ "${#apks[@]}" -eq 0 ]; then
             echo "::error::No APK found under bin/ to verify"
+            echo "verify_result=no_apk" >> "$GITHUB_OUTPUT"
             exit 1
           fi
           APK="${apks[0]}"
           echo "Checking FileProvider + CAMERA + CameraX in $APK"
+          echo "apk_path=$APK" >> "$GITHUB_OUTPUT"
+          echo "apk_name=$(basename "$APK")" >> "$GITHUB_OUTPUT"
+          echo "apk_size=$(wc -c < "$APK" | tr -d ' ')" >> "$GITHUB_OUTPUT"
 
           SDK_ROOT="${HOME}/.buildozer/android/platform/android-sdk"
           AAPT=""
@@ -139,11 +192,18 @@ jobs:
           head -n 60 apk_manifest_dump.txt || true
 
           FAIL=0
-          if ! grep -qi "fileprovider" apk_manifest_dump.txt; then
+          FP_OK=fail
+          CAM_OK=fail
+          CX_OK=fail
+          if grep -qi "fileprovider" apk_manifest_dump.txt; then
+            FP_OK=ok
+          else
             echo "::error::FileProvider missing from APK AndroidManifest.xml — share will fail on device"
             FAIL=1
           fi
-          if ! grep -qi "CAMERA" apk_manifest_dump.txt; then
+          if grep -qi "CAMERA" apk_manifest_dump.txt; then
+            CAM_OK=ok
+          else
             echo "::error::CAMERA permission missing from APK AndroidManifest.xml — live camera will fail"
             FAIL=1
           fi
@@ -158,19 +218,27 @@ jobs:
             > camerax_strings.txt || true
           head -n 20 camerax_strings.txt || true
 
-          if ! grep -qiE 'androidx\.camera|org\.kivy\.camerax|CameraX' apk_dex_strings.txt; then
+          if grep -qiE 'androidx\.camera|org\.kivy\.camerax|CameraX' apk_dex_strings.txt; then
+            CX_OK=ok
+          else
             echo "::error::CameraX provider classes missing from APK — copy camerax_provider and check p4a.hook"
             FAIL=1
           fi
 
+          echo "check_fileprovider=$FP_OK" >> "$GITHUB_OUTPUT"
+          echo "check_camera=$CAM_OK" >> "$GITHUB_OUTPUT"
+          echo "check_camerax=$CX_OK" >> "$GITHUB_OUTPUT"
+
           if [ "$FAIL" -ne 0 ]; then
+            echo "verify_result=fail" >> "$GITHUB_OUTPUT"
             exit 1
           fi
+          echo "verify_result=ok" >> "$GITHUB_OUTPUT"
           echo "FileProvider + CAMERA + CameraX OK"
 
       - name: Upload APK packaging check dump
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: apk-packaging-check
           path: |
@@ -180,36 +248,64 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      - name: Prepare failure logs
-        if: failure()
+      - name: Prepare logs
+        if: always()
         run: |
           set -euo pipefail
-          mkdir -p ci-failure
+          mkdir -p ci-logs
           if [ -f buildozer-ci.log ]; then
-            tail -n 1500 buildozer-ci.log > ci-failure/buildozer-tail.txt
-            cp buildozer-ci.log ci-failure/buildozer-full.log
+            tail -n 1500 buildozer-ci.log > ci-logs/buildozer-tail.txt
+            cp buildozer-ci.log ci-logs/buildozer-full.log
           else
-            echo "No buildozer-ci.log captured" > ci-failure/buildozer-tail.txt
+            echo "No buildozer-ci.log captured" > ci-logs/buildozer-tail.txt
           fi
           find .buildozer -name "*.log" -type f 2>/dev/null | head -20 | while read -r f; do
             base=$(basename "$f")
-            tail -n 200 "$f" > "ci-failure/extra-${base}.txt" || true
+            tail -n 200 "$f" > "ci-logs/extra-${base}.txt" || true
           done
 
-      - name: Upload failure log tail
-        if: failure()
-        uses: actions/upload-artifact@v5
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v7
         with:
-          name: colorsight-build-failure-log
-          path: ci-failure/buildozer-tail.txt
-          if-no-files-found: warn
-          retention-days: 3
+          name: colorsight-build-logs
+          path: ci-logs/
+          if-no-files-found: ignore
+          retention-days: 7
 
-      - name: Upload full build log
-        if: failure()
-        uses: actions/upload-artifact@v5
-        with:
-          name: colorsight-build-full-log
-          path: buildozer-ci.log
-          if-no-files-found: warn
-          retention-days: 3
+      - name: Job summary
+        if: always()
+        run: |
+          set -euo pipefail
+          APK_NAME="${{ steps.verify.outputs.apk_name }}"
+          APK_SIZE="${{ steps.verify.outputs.apk_size }}"
+          VERIFY="${{ steps.verify.outputs.verify_result }}"
+          FP="${{ steps.verify.outputs.check_fileprovider }}"
+          CAM="${{ steps.verify.outputs.check_camera }}"
+          CX="${{ steps.verify.outputs.check_camerax }}"
+
+          # Versions from buildozer.spec / environment (best-effort)
+          API=$(grep -E '^android.api\s*=' buildozer.spec | head -1 | sed 's/.*=\s*//')
+          NDK=$(grep -E '^android.ndk\s*=' buildozer.spec | head -1 | sed 's/.*=\s*//')
+          ARCH=$(grep -E '^android.archs\s*=' buildozer.spec | head -1 | sed 's/.*=\s*//')
+          P4A="2026.05.09 (via buildozer default)"
+          PY_HOST=$(python -c 'import sys; print(sys.version.split()[0])')
+
+          {
+            echo "## Android APK build"
+            echo ""
+            echo "| Item | Value |"
+            echo "|------|-------|"
+            echo "| APK | ${APK_NAME:-_(none)_} |"
+            echo "| Size (bytes) | ${APK_SIZE:-_n/a_} |"
+            echo "| Host Python | ${PY_HOST} |"
+            echo "| python-for-android | ${P4A} |"
+            echo "| android.api | ${API} |"
+            echo "| android.ndk | ${NDK} |"
+            echo "| android.archs | ${ARCH} |"
+            echo "| Verify | ${VERIFY:-skipped} |"
+            echo "| FileProvider | ${FP:-_} |"
+            echo "| CAMERA permission | ${CAM:-_} |"
+            echo "| CameraX classes | ${CX:-_} |"
+            echo "| clean_cache | ${{ inputs.clean_cache || false }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
