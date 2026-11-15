@@ -271,52 +271,79 @@ def _iter_py_files() -> list[Path]:
     return out
 
 
-def check_kivy_pitfalls() -> None:
-    # Builtin names from Factory when Kivy is importable
-    factory_names: set[str] = set()
-    try:
-        os.environ.setdefault("KIVY_NO_ARGS", "1")
-        os.environ.setdefault("KIVY_NO_CONSOLELOG", "1")
-        from kivy.factory import Factory  # type: ignore
+# Static Kivy builtin widget names — never import Kivy here (avoids creating a Window
+# / "Couldn't connect to X server" on headless CI). Optional Factory merge is
+# display-safe only when KIVY_NO_ARGS is set and import stays at kivy.factory.
+_KIVY_BUILTIN_WIDGETS = {
+    "Widget",
+    "Label",
+    "Button",
+    "Image",
+    "TextInput",
+    "ScrollView",
+    "BoxLayout",
+    "FloatLayout",
+    "GridLayout",
+    "StackLayout",
+    "AnchorLayout",
+    "RelativeLayout",
+    "Screen",
+    "ScreenManager",
+    "ProgressBar",
+    "Switch",
+    "Slider",
+    "Popup",
+    "ModalView",
+    "Carousel",
+    "RecyclerView",
+    "Video",
+    "Camera",
+    "ActionBar",
+    "Spinner",
+    "TabbedPanel",
+    "FileChooser",
+    "FileChooserListView",
+    "FileChooserIconView",
+    "CheckBox",
+    "ToggleButton",
+    "CodeInput",
+    "VKeyboard",
+    "PageLayout",
+    "Scatter",
+    "ScatterLayout",
+    "StencilView",
+    "EffectWidget",
+    "Sandbox",
+}
 
-        factory_names = {str(k) for k in getattr(Factory, "classes", {}).keys()}
-        # Common builtins always treat as reserved even if Factory is empty early
-        factory_names.update(
-            {
-                "Widget",
-                "Label",
-                "Button",
-                "Image",
-                "TextInput",
-                "ScrollView",
-                "BoxLayout",
-                "FloatLayout",
-                "GridLayout",
-                "StackLayout",
-                "AnchorLayout",
-                "RelativeLayout",
-                "Screen",
-                "ScreenManager",
-                "ProgressBar",
-                "Switch",
-                "Slider",
-                "Popup",
-                "ModalView",
-                "Carousel",
-                "RecyclerView",
-                "Video",
-                "Camera",
-                "ActionBar",
-                "Spinner",
-                "TabbedPanel",
-                "FileChooser",
-                "FileChooserListView",
-                "FileChooserIconView",
-            }
-        )
-        ok(f"Kivy Factory loaded ({len(factory_names)} class names)")
-    except Exception as exc:  # noqa: BLE001
-        warn(f"Kivy not importable — skipping Factory name check ({exc})")
+
+def check_kivy_pitfalls() -> None:
+    # Prefer static list so preflight never needs a display. Optionally enrich
+    # from kivy.factory only when not headless (importing Kivy can still pull
+    # a Window provider on some platforms).
+    factory_names: set[str] = set(_KIVY_BUILTIN_WIDGETS)
+    os.environ.setdefault("KIVY_NO_ARGS", "1")
+    os.environ.setdefault("KIVY_NO_CONSOLELOG", "1")
+    headless = os.environ.get("COLORSIGHT_HEADLESS", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+    if headless:
+        ok(f"Kivy builtin names ready ({len(factory_names)}; static list, headless)")
+    else:
+        try:
+            # Import submodule only — do not touch kivy.core.window
+            import kivy.factory as _kf  # type: ignore
+
+            classes = getattr(getattr(_kf, "Factory", None), "classes", None) or {}
+            factory_names.update(str(k) for k in classes.keys())
+            ok(
+                f"Kivy builtin names ready ({len(factory_names)}; Factory optional merge ok)"
+            )
+        except Exception as exc:  # noqa: BLE001
+            warn(f"kivy.factory unavailable - using static builtin list ({exc})")
+            ok(f"Kivy builtin names ready ({len(factory_names)}; static list)")
 
     size_re = re.compile(r"(?<![A-Za-z0-9_])size\s*=\s*dp\(([^,\n\)]+)\)")
     prop_on_re = re.compile(

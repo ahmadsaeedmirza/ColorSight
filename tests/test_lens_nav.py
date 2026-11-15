@@ -5,24 +5,31 @@ from __future__ import annotations
 import os
 import unittest
 
-# Fake camera before Kivy / app imports
+# Fake camera / no-arg Kivy before any Kivy import
 os.environ.setdefault("COLORSIGHT_FAKE_CAMERA", "1")
 os.environ.setdefault("KIVY_NO_ARGS", "1")
 
-from kivy.config import Config  # noqa: E402
-
-Config.set("graphics", "width", "390")
-Config.set("graphics", "height", "844")
-Config.set("graphics", "resizable", "0")
-
-from kivy.clock import Clock  # noqa: E402
-
-from colorsight.app import ColorSightApp, RootShell  # noqa: E402
-from colorsight.prefs import mark_onboarding_done  # noqa: E402
-
 
 class TestLensNavNoCrash(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # Lazy imports so a missing display cannot abort the whole suite at import time
+        from tests.gui_guard import ensure_kivy_window
+
+        ensure_kivy_window(reason="Lens nav regression needs a Kivy Window")
+
+        from kivy.config import Config
+
+        Config.set("graphics", "width", "390")
+        Config.set("graphics", "height", "844")
+        Config.set("graphics", "resizable", "0")
+
     def test_home_lens_camera_lens_back_loop(self):
+        from kivy.clock import Clock
+
+        from colorsight.app import ColorSightApp, RootShell
+        from colorsight.prefs import mark_onboarding_done
+
         mark_onboarding_done()
         app = ColorSightApp()
         root = app.build()

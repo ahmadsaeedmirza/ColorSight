@@ -2,26 +2,11 @@
 
 from __future__ import annotations
 
+import os
 import unittest
 from pathlib import Path
 
-from kivy.base import EventLoop
-from kivy.clock import Clock
-
-from colorsight.app import RootShell
-from colorsight.prefs import mark_onboarding_done, set_theme_pref
-from colorsight.safe_area import set_debug_insets
-from colorsight.theme import register_fonts
-from colorsight.theme.tokens import (
-    DARK_COLORS,
-    LIGHT_COLORS,
-    NEUTRAL_BG,
-    Colors,
-    apply_color_set,
-)
-from colorsight.widgets.chip import Chip
-from colorsight.widgets.floating_nav_bar import FloatingNavBar
-from colorsight.widgets.pastel_card import PastelCard
+os.environ.setdefault("KIVY_NO_ARGS", "1")
 
 
 def _approx(a, b, tol=0.02) -> bool:
@@ -31,6 +16,8 @@ def _approx(a, b, tol=0.02) -> bool:
 
 
 def _tick(n: int = 2):
+    from kivy.clock import Clock
+
     for _ in range(n):
         Clock.tick()
 
@@ -38,20 +25,42 @@ def _tick(n: int = 2):
 class TestThemeRebuild(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        from tests.gui_guard import ensure_kivy_window
+
+        ensure_kivy_window(reason="Theme rebuild needs a Kivy Window")
+
+        from colorsight.prefs import mark_onboarding_done, set_theme_pref
+        from colorsight.safe_area import set_debug_insets
+        from colorsight.theme import register_fonts
+
         register_fonts()
-        EventLoop.ensure_window()
         Path.home().joinpath(".colorsight").mkdir(parents=True, exist_ok=True)
         mark_onboarding_done()
         set_theme_pref("light")
         set_debug_insets(28, 24)
 
-    def _build_shell(self, start: str = "settings") -> RootShell:
+    def _build_shell(self, start: str = "settings"):
+        from colorsight.app import RootShell
+        from colorsight.theme.tokens import apply_color_set
+
         apply_color_set("light")
         shell = RootShell(start_screen=start)
         _tick()
         return shell
 
     def test_rebuild_shell_switches_chrome_keeps_neutral(self):
+        from colorsight.app import RootShell
+        from colorsight.theme.tokens import (
+            DARK_COLORS,
+            LIGHT_COLORS,
+            NEUTRAL_BG,
+            Colors,
+            apply_color_set,
+        )
+        from colorsight.widgets.chip import Chip
+        from colorsight.widgets.floating_nav_bar import FloatingNavBar
+        from colorsight.widgets.pastel_card import PastelCard
+
         # Light shell
         apply_color_set("light")
         light = RootShell(start_screen="home")
@@ -115,6 +124,8 @@ class TestThemeRebuild(unittest.TestCase):
             _tick(1)
 
     def test_color_sets_differ(self):
+        from colorsight.theme.tokens import Colors, apply_color_set
+
         apply_color_set("light")
         lt = tuple(Colors.text)
         lb = tuple(Colors.bg)

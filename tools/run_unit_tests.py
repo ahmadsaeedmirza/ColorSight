@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-"""Discover and run unit tests; skip GUI modules when COLORSIGHT_SKIP_GUI=1.
+"""Discover and run unit tests.
 
-Does not modify existing test files — exclusion is loader-side only.
+When COLORSIGHT_SKIP_GUI=1, GUI modules are never imported (avoids headless
+X-server aborts at import time). Prefer xvfb-run + COLORSIGHT_HEADLESS=1 in CI
+so GUI tests can run or SkipTest cleanly.
 """
 
 from __future__ import annotations
@@ -25,30 +27,26 @@ GUI_TEST_MODULES = frozenset(
 
 
 def main() -> int:
+    os.environ.setdefault("KIVY_NO_ARGS", "1")
     skip_gui = os.environ.get("COLORSIGHT_SKIP_GUI", "").strip().lower() in {
         "1",
         "true",
         "yes",
     }
     loader = unittest.TestLoader()
-    suite = loader.discover(start_dir=str(ROOT / "tests"), pattern="test_*.py")
 
     if skip_gui:
-        filtered = unittest.TestSuite()
-
-        def _walk(s):
-            for t in s:
-                if isinstance(t, unittest.TestSuite):
-                    _walk(t)
-                else:
-                    mod = t.__class__.__module__
-                    if mod in GUI_TEST_MODULES:
-                        continue
-                    filtered.addTest(t)
-
-        _walk(suite)
-        suite = filtered
-        print(f"COLORSIGHT_SKIP_GUI=1 — excluding {sorted(GUI_TEST_MODULES)}")
+        # Load modules individually so GUI files are never imported
+        suite = unittest.TestSuite()
+        tests_dir = ROOT / "tests"
+        for path in sorted(tests_dir.glob("test_*.py")):
+            mod_name = f"tests.{path.stem}"
+            if mod_name in GUI_TEST_MODULES:
+                continue
+            suite.addTests(loader.loadTestsFromName(mod_name))
+        print(f"COLORSIGHT_SKIP_GUI=1 - excluding {sorted(GUI_TEST_MODULES)}")
+    else:
+        suite = loader.discover(start_dir=str(ROOT / "tests"), pattern="test_*.py")
 
     runner = unittest.TextTestRunner(verbosity=1)
     result = runner.run(suite)

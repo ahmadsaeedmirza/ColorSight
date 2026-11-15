@@ -29,27 +29,54 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install headless GUI stack (xvfb + SDL/GL)
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            xvfb \
+            libgl1 \
+            libgl1-mesa-dri \
+            libglx-mesa0 \
+            libmtdev1 \
+            libsdl2-2.0-0 \
+            libsdl2-image-2.0-0 \
+            libsdl2-mixer-2.0-0 \
+            libsdl2-ttf-2.0-0 \
+            libfreetype6 \
+            libportmidi0
+
       - name: Install preflight deps
         run: |
           python -m pip install --upgrade pip
-          # Kivy for Factory name checks; NumPy for non-GUI unit tests
+          # Kivy optional for Factory merge in preflight; NumPy/Pillow for unit tests
           python -m pip install "kivy" "numpy" "pillow"
 
-      - name: Run preflight
+      - name: Run preflight (no Window / display required)
+        env:
+          KIVY_NO_ARGS: "1"
+          COLORSIGHT_HEADLESS: "1"
         run: python tools/preflight.py
 
-      - name: Non-GUI unit tests
+      - name: Unit tests under xvfb
         env:
-          COLORSIGHT_SKIP_GUI: "1"
           KIVY_NO_ARGS: "1"
-        run: python tools/run_unit_tests.py
+          KIVY_NO_CONSOLELOG: "0"
+          COLORSIGHT_HEADLESS: "1"
+          COLORSIGHT_FAKE_CAMERA: "1"
+        run: |
+          set -euo pipefail
+          # GUI tests either pass under Xvfb or SkipTest — never abort the job (exit 102)
+          xvfb-run -a -s "-screen 0 1280x800x24" python tools/run_unit_tests.py
 
       - name: Preflight summary
         if: always()
         run: |
           {
             echo "## Preflight"
-            echo "- preflight.py + non-GUI unit tests (COLORSIGHT_SKIP_GUI=1)"
+            echo "- preflight.py (static / no Window)"
+            echo "- unit tests via \`xvfb-run\` + COLORSIGHT_HEADLESS=1"
+            echo "- GUI tests skip cleanly if Window/OpenGL still unavailable"
             echo "- Python: 3.11"
           } >> "$GITHUB_STEP_SUMMARY"
 

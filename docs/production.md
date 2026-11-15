@@ -7,10 +7,22 @@ Run these **before** pushing to `build-apk` or triggering **Android APK**:
 ```bash
 # From project root (venv active)
 python tools/preflight.py
-python tools/run_unit_tests.py          # or: COLORSIGHT_SKIP_GUI=1 for CI-like
-# Full suite including GUI tests (needs display / Kivy Window):
+# CI-like (skip importing GUI modules):
+COLORSIGHT_SKIP_GUI=1 python tools/run_unit_tests.py
+# Full suite including GUI tests (needs a display / Kivy Window):
+python tools/run_unit_tests.py
 # python -m unittest discover -s tests -v
 ```
+
+**CI headless testing:** the GHA `preflight` job installs `xvfb` + SDL/GL libs and runs:
+
+```bash
+xvfb-run -a -s "-screen 0 1280x800x24" python tools/run_unit_tests.py
+```
+
+with `COLORSIGHT_HEADLESS=1`, `KIVY_NO_ARGS=1`. GUI tests (`test_lens_nav`, `test_chip_centering`, `test_theme_rebuild`) call `tests.gui_guard.ensure_kivy_window` and **SkipTest** if Window/OpenGL still fails — they must never abort with X-server exit 102. Desktop smoke / phone-sim GUIs stay **local-only** (`tools/smoke_*.py`, `tools/run_phone_sim.py`).
+
+On **WSL/Linux** you can mirror CI with the same `xvfb-run` line. On **Windows**, run `python tools/preflight.py` + unit tests with a real desktop session (or `COLORSIGHT_SKIP_GUI=1`).
 
 Then push / dispatch the workflow. Mistakes that used to cost a 30–90 minute Buildozer run now fail in the **`preflight`** job (~2 minutes).
 
@@ -157,7 +169,7 @@ Build the debug APK in the cloud so you do **not** need a local Buildozer/WSL to
 4. Either:
    - **Run workflow** (`workflow_dispatch`; optional **`clean_cache`** to skip cache restore), or
    - Push any commit to a branch named **`build-apk`**.
-5. **`preflight`** job (Python 3.11, ~2 min) runs `tools/preflight.py` + non-GUI unit tests (`COLORSIGHT_SKIP_GUI=1`). **`build`** only starts if preflight passes (`needs: preflight`).
+5. **`preflight`** job (Python 3.11, ~2 min) installs xvfb/SDL/GL, runs `tools/preflight.py` (no Window), then unit tests under `xvfb-run` with `COLORSIGHT_HEADLESS=1`. **`build`** only starts if preflight passes (`needs: preflight`).
 6. Build can take **1–3+ hours** cold; later runs reuse `~/.buildozer` + `./.buildozer` under cache key **`buildozer-v2-<hash of buildozer.spec + constraints.txt + camerax_provider/**>`**, excluding `build/venv`. Concurrency cancels an older run on the same branch.
 
 Workflow file: `.github/workflows/android.yml` (ubuntu-22.04, Java 17, Node-24 action majors, `cython==0.29.36`, `buildozer -v android debug`, timeout 360 min). Before each build the job deletes `build/venv` so p4a cannot corrupt pip. The APK + build logs upload with **`if: always()`** when present. Packaging checks write dumps to files then grep those files (never `echo | grep` under `pipefail`). Job summary (`GITHUB_STEP_SUMMARY`) lists APK name/size, api/ndk/arch, and FileProvider / CAMERA / CameraX results.

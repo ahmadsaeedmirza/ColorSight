@@ -4,6 +4,14 @@ Newest entries first. Append after every prompt per `rules.md`.
 
 ---
 
+## 2026-11-16 — Fix preflight headless X-server abort
+
+**Prompt:** GHA `preflight` died with “Couldn't connect to X server” / exit 102 when Kivy imported a Window on ubuntu; `build` never started. No `/core` / vision-test / app / assertion changes.
+
+**Fix:** apt xvfb + SDL/GL in preflight; unit tests via `xvfb-run -a -s "-screen 0 1280x800x24"` with `COLORSIGHT_HEADLESS=1`. `tools/preflight.py` uses a static Kivy builtin list (optional `kivy.factory` only — never creates a Window). GUI tests lazy-import + `tests.gui_guard.ensure_kivy_window` → SkipTest if Window fails under headless. `run_unit_tests.py` never imports GUI modules when `COLORSIGHT_SKIP_GUI=1`. Docs: CI headless notes; GUI smokes local-only.
+
+---
+
 ## 2026-11-15 — Android CI preflight guardrails
 
 **Prompt:** Stop cloud builds failing for avoidable reasons. No `/core` / vision-test / app behavior / existing-test changes.

@@ -2,23 +2,29 @@
 
 from __future__ import annotations
 
+import os
 import unittest
 
-from kivy.base import EventLoop
-from kivy.clock import Clock
-from kivy.metrics import dp
-
-from colorsight.theme import register_fonts
-from colorsight.widgets.chip import Chip, ChipRow
+os.environ.setdefault("KIVY_NO_ARGS", "1")
 
 
 class ChipCenteringTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        from tests.gui_guard import ensure_kivy_window
+
+        ensure_kivy_window(reason="Chip centering needs a Kivy Window")
+
+        from colorsight.theme import register_fonts
+
         register_fonts()
-        EventLoop.ensure_window()
 
     def test_each_chip_label_center_within_1dp(self):
+        from kivy.clock import Clock
+        from kivy.metrics import dp
+
+        from colorsight.widgets.chip import Chip, ChipRow
+
         row = ChipRow(
             options=["All", "Test", "Photos", "Camera", "Lens", "Profile"],
             selected="All",
