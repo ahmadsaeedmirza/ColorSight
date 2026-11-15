@@ -62,11 +62,17 @@ Helper: `colorsight.widgets.Icon` — consistent glyph size, color, and font reg
 
 ## Color tokens
 
-Light + dark palettes live in `tokens.py` (`LIGHT_COLORS` / `DARK_COLORS`). `Colors.*` is a mutable bag updated by `ThemeController` (Settings: System / Light / Dark). Widgets redraw via `apply_theme()` / tree walk — avoid hard-coded RGB in screens.
+Light + dark palettes live in `tokens.py` (`LIGHT_COLORS` / `DARK_COLORS`). `Colors.*` is a mutable bag updated by `ThemeController` (Settings: System / Light / Dark).
+
+**Theme apply = full UI rebuild:** changing System/Light/Dark updates tokens + `Window.clearcolor`, then `ColorSightApp.rebuild_ui()` recreates the `ScreenManager`, every screen, and the floating nav in-process (prefs/profile stay on disk). Returning to Settings after a theme pick. Avoid relying on partial `apply_theme()` walks — canvas instructions can keep stale colors. **System** follows Android `Configuration.uiMode` at start, on resume, and when night mode flips.
+
+### Safe-area insets (Android 15 / edge-to-edge)
+
+`colorsight.safe_area` reads status/nav/cutout insets (WindowInsets, else `status_bar_height`) into **`Spacing.safe_top`** / **`Spacing.safe_bottom`** (dp; desktop minimum top **16**). `ScreenHeader` and Home/Welcome tops use `safe_top`; the floating nav sits above `safe_bottom`; `nav_clearance` includes it. Phone sim: `COLORSIGHT_INSET_TOP=28` / `COLORSIGHT_INSET_BOTTOM=24` (or `set_debug_insets`).
 
 ### Accuracy rule (mandatory)
 
-**Vision Test trial UI** and **Photos / Camera preview hosts** always use **`NEUTRAL_BG` / `NEUTRAL_SURFACE`** (light cream / white), regardless of the chrome theme. Dark mode must never tint stimuli, corrected previews, or loupe samples.
+**Vision Test trial UI**, **tutorial**, and **Photos / Camera preview hosts** always use **`NEUTRAL_BG` / `NEUTRAL_SURFACE`** (light cream / white), regardless of the chrome theme. Dark mode must never tint stimuli, corrected previews, or loupe samples.
 
 ### Surfaces & text (light)
 
@@ -208,9 +214,11 @@ Apply the **same** clamped value to fill **and** matching shadow layers. Used by
 
 ### Test screen recipe
 
+- **First-time tutorial** (neutral BG): three tips (gap in the ring → tap the matching arrow → “I can’t see it”) with Skip on every step; optional practice trial with instant feedback; then **Start the real test**. Practice never touches the staircase/scoring/profile. Pref `test_tutorial_seen`; Replay from Settings or the checklist link.
 - **Checklist** (yellow/mint, `PastelCard(auto_height=True)`): brightness / night mode / ~40 cm / glasses  
+
 - **Trivector**: “Question N” + progress capsule; Landolt C ~132 dp from a **512 px** texture (linear filter); prompt with clear gap above an **inverted-T D-pad** (Up; Left·Down·Right @ 72 dp / 8 dp gaps); “I can't see it” full width; ~6 s timeout. Desktop: physical arrow keys answer (nothing else advances). Trial shell is **reused** (texture blit only). Compact column (~570 dp) fits **360×640** without scroll; bottom inset = `nav_height + nav_margin + 8` (clears floating nav).  
-- **Headers**: every back+title screen uses `ScreenHeader` (`header_gap` ~10 dp) so the title never overlaps the back control; Settings / Photos / Profile / Camera use `screen_top` inset.  
+- **Headers**: every back+title screen uses `ScreenHeader` (`header_gap` ~10 dp + `safe_top`) so the title clears the status bar / notch.  
 
 
 - **Hue** then **results**: type card; severity bar with “N / 100”; axis rows with labels + ×cutoff + 1.0× tick; yellow disclaimer with **auto-height** wrapped text (no clipping); before/after swatches; **Save my profile**  

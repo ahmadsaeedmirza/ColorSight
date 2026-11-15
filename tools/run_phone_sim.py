@@ -19,6 +19,9 @@ sys.path.insert(0, str(ROOT))
 
 # Half of 2.75 — pairs with 540×1200 (half of 1080×2400)
 os.environ["KIVY_METRICS_DENSITY"] = "1.375"
+# Simulate Android 15 edge-to-edge status + gesture bar (dp)
+os.environ.setdefault("COLORSIGHT_INSET_TOP", "28")
+os.environ.setdefault("COLORSIGHT_INSET_BOTTOM", "24")
 
 from kivy.config import Config  # noqa: E402
 
@@ -28,6 +31,8 @@ Config.set("graphics", "resizable", "1")
 
 from colorsight.app import ColorSightApp  # noqa: E402
 from colorsight.prefs import mark_onboarding_done  # noqa: E402
+from colorsight.safe_area import refresh_safe_insets, set_debug_insets  # noqa: E402
+from colorsight.theme.tokens import Spacing  # noqa: E402
 from kivy.clock import Clock  # noqa: E402
 from kivy.core.window import Window  # noqa: E402
 from kivy.metrics import Metrics  # noqa: E402
@@ -40,16 +45,20 @@ def main() -> None:
     if not prefs.is_file():
         prefs.write_text('{"onboarding_done": true}', encoding="utf-8")
 
+    set_debug_insets(28, 24)
     app = ColorSightApp()
 
     def _announce(_dt):
         mark_onboarding_done()
         Window.size = (540, 1200)
+        refresh_safe_insets()
         print(
             "PHONE_SIM",
             f"window={tuple(Window.size)}",
             f"density={Metrics.density:.3f}",
             f"dpi={Metrics.dpi:.1f}",
+            f"safe_top={Spacing.safe_top}",
+            f"safe_bottom={Spacing.safe_bottom}",
             "screens=welcome,home,test,photos,camera,profile,settings",
         )
         print("PHONE_SIM_HINT Navigate with the floating nav; Ctrl+C / close window to exit.")

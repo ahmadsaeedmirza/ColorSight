@@ -128,14 +128,17 @@ class Spacing:
     lg = 24
     xl = 32
     screen_x = 22
-    screen_top = 16  # Top safe padding under status / notch
+    # Safe areas (dp) — refreshed by colorsight.safe_area.refresh_safe_insets()
+    safe_top = 16
+    safe_bottom = 0
+    screen_top = 16  # Alias of safe_top after refresh (status / notch)
     header_gap = 10  # Gap between back button and title
     grid_gap = 12
     nav_height = 64
     nav_margin = 18  # 16–20dp side inset
     nav_fab_size = 52
     nav_fab_raise = 12
-    # Bottom content inset so scroll areas clear the floating nav (+ raised FAB)
+    # Bottom content inset so scroll areas clear the floating nav (+ raised FAB + safe_bottom)
     nav_clearance = 120
 
 

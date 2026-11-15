@@ -155,7 +155,7 @@ class LogViewerScreen(Screen):
             orientation="vertical",
             padding=[
                 dp(Spacing.screen_x),
-                dp(Spacing.screen_top),
+                dp(Spacing.sm),
                 dp(Spacing.screen_x),
                 dp(Spacing.md),
             ],
@@ -215,7 +215,7 @@ class SettingsScreen(Screen):
             orientation="vertical",
             padding=[
                 dp(Spacing.screen_x),
-                dp(Spacing.screen_top),
+                dp(Spacing.sm),
                 dp(Spacing.screen_x),
                 dp(Spacing.nav_clearance),
             ],
@@ -286,12 +286,23 @@ class SettingsScreen(Screen):
         view_log.bg_color = Colors.accent_dark
         view_log.on_press_cb = lambda *_: self._go("log_viewer")
         root.add_widget(view_log)
+        replay = PrimaryButton(text="Replay vision-test tutorial")
+        replay.bg_color = Colors.accent_blue
+        replay.on_press_cb = lambda *_: self._replay_tutorial()
+        root.add_widget(replay)
         root.add_widget(Widget(size_hint_y=None, height=dp(8)))
         scroll.add_widget(root)
         self.add_widget(scroll)
 
     def apply_theme(self):
         self._build()
+
+    def _replay_tutorial(self):
+        from colorsight.prefs import request_tutorial_replay
+
+        request_tutorial_replay()
+        if self.manager:
+            self.manager.current = "test"
 
     def _go(self, name: str):
         if self.manager:

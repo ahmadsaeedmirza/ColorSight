@@ -19,6 +19,7 @@
 | **Photos** — pick (Photo Picker / GET_CONTENT), Corrected@0% divider, Strength, MediaStore save, FileProvider share, comparison | Done |
 | **Camera** — live OpenCV (desktop) / Camera4Kivy+CameraX (Android), freeze/capture, no silent fake | Done |
 | **Lens** — shared loupe + `name_color` on original frames | Done |
+| **Theme rebuild + safe insets + Vision Test tutorial** | Done |
 | **Profile** — hero card, swatches, fine-tune (only overwrite), clear | Done |
 | **Settings** — About, Privacy, Display tips, FPS debug | Done |
 | First-run Welcome → test; later launches → Home; Android back | Done |

@@ -163,7 +163,12 @@ class ChipRow(BoxLayout):
         if callable(self.change_cb):
             self.change_cb(self.selected)
 
+    def reset_scroll(self):
+        """Show the first chips (All / Test) — call on Home enter / theme rebuild."""
+        self._scroll.scroll_x = 0
+
     def apply_theme(self):
         for child in self._row.children:
             if isinstance(child, Chip):
                 child.apply_theme()
+        self.reset_scroll()

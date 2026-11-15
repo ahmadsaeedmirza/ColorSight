@@ -147,11 +147,11 @@ Before building, catch scaling/clipping bugs:
 
 ```bash
 python tools/run_phone_sim.py
-# Automated pass over Welcome/Home/Test/Photos/Camera/Profile/Settings:
-python tools/smoke_phone_sim.py   # → SMOKE_PHONE_SIM …
+# Automated pass over Welcome/Home/Test/Photos/Camera/Profile/Settings (+ theme flip):
+python tools/smoke_phone_sim.py   # → SMOKE_PHONE_SIM … insets:top=28:bottom=24
 ```
 
-Sim: **540×1200** window at **`KIVY_METRICS_DENSITY=1.375`** (half-scale of 1080×2400 @ density 2.75). `main.py` only sets the 390×844 desktop window when `platform` is not android/ios — never touch `Window.size` on device.
+Sim: **540×1200** at **`KIVY_METRICS_DENSITY=1.375`**, with debug insets **`COLORSIGHT_INSET_TOP=28`** / **`COLORSIGHT_INSET_BOTTOM=24`** (edge-to-edge status + gesture bar). Theme switches rebuild the whole UI. `main.py` only sets the 390×844 desktop window off-device.
 
 ### If the build fails
 
@@ -173,6 +173,8 @@ Sim: **540×1200** window at **`KIVY_METRICS_DENSITY=1.375`** (half-scale of 108
 | Old kivy/numpy/pillow pins on Python 3.14 | Keep those **unpinned**; single `version = 0.1.0` (no `version.regex`) |
 | **UI stuck in a ~390 px box (bottom-left) on phone** | Desktop `Window.size` / Config **390×844** was also applied on Android. Guard with `platform not in ('android','ios')` in `main.py`; never set window size in `app.py` on device. Use `tools/run_phone_sim.py` to catch this |
 | **Black flash between screens** | Every `Screen` + root must paint an opaque themed (or neutral) bg in `canvas.before`; keep `Window.clearcolor` in sync with the theme |
+| **Theme only half-applies** | Partial `apply_theme` walks leave stale canvas colors. Fix: full `rebuild_ui()` after token update (see `design.md`) |
+| **Chrome under status bar (api 35)** | Edge-to-edge: use `Spacing.safe_top` / `safe_bottom` from `safe_area`; verify with phone-sim inset env vars |
 | **On-device debugging** | Settings → Debug → **View recent log** (last 300 lines, copy). Log file rotates under `user_data_dir` (paths never shown in UI) |
 | Play Protect / “older Android” on install | Normal for **debug** APKs; install anyway. Target SDK is `android.api = 35` (min 24) |
 | `INSTALL_FAILED_UPDATE_INCOMPATIBLE` | New debug key each CI run — **uninstall** `org.colorsight.colorsight` before installing |

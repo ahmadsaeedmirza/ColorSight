@@ -4,6 +4,22 @@ Newest entries first. Append after every prompt per `rules.md`.
 
 ---
 
+## 2026-11-15 — Theme rebuild, safe insets, chip scroll, test tutorial
+
+**Prompt:** Real-phone UI: theme not applying fully; status-bar overlap (api 35); Home chips start scrolled; skippable Vision Test tutorial. No `/core` / staircase / scoring / existing-test changes.
+
+**Theme:** `ThemeController.apply` → tokens + `Window.clearcolor` + `ColorSightApp.rebuild_ui()` (recreate SM/screens/nav; return to Settings). System night mode on start/resume. Test: `tests/test_theme_rebuild.py`.
+
+**Insets:** `safe_area.refresh_safe_insets` → `Spacing.safe_top` / `safe_bottom`; headers/Home/Welcome/nav; phone-sim 28/24 dp.
+
+**Chips:** `ChipRow.reset_scroll()` on Home enter + rebuild.
+
+**Tutorial:** `test_tutorial.py` + prefs `test_tutorial_seen`; Skip; practice UI-only; Replay in Settings/checklist. Neutral BG.
+
+**Verify:** `SMOKE_PHONE_SIM … insets:top=28:bottom=24` + theme rebuild. Docs/rules updated.
+
+---
+
 ## 2026-11-15 — Fix CI packaging-check false fail (run #4)
 
 **Prompt:** Run #4 APK built + CameraX strings present, but “Verify FileProvider + Camera” failed. Cause: `set -euo pipefail` + `echo \| grep` Broken pipe. No `/core` / vision-test / app / existing-test changes.

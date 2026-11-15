@@ -53,3 +53,35 @@ def set_theme_pref(pref: str) -> None:
     data = load_prefs()
     data["theme"] = pref
     save_prefs(data)
+
+
+def is_test_tutorial_seen() -> bool:
+    return bool(load_prefs().get("test_tutorial_seen"))
+
+
+def mark_test_tutorial_seen() -> None:
+    data = load_prefs()
+    data["test_tutorial_seen"] = True
+    save_prefs(data)
+
+
+def clear_test_tutorial_seen() -> None:
+    """Allow Settings / checklist to replay the tutorial."""
+    data = load_prefs()
+    data["test_tutorial_seen"] = False
+    save_prefs(data)
+
+
+def request_tutorial_replay() -> None:
+    data = load_prefs()
+    data["test_tutorial_seen"] = False
+    data["test_tutorial_force"] = True
+    save_prefs(data)
+
+
+def consume_tutorial_force() -> bool:
+    data = load_prefs()
+    if not data.pop("test_tutorial_force", False):
+        return False
+    save_prefs(data)
+    return True

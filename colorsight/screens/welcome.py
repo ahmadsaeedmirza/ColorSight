@@ -35,7 +35,7 @@ class WelcomeScreen(Screen):
             orientation="vertical",
             padding=[
                 dp(Spacing.screen_x),
-                dp(Spacing.lg),
+                dp(Spacing.safe_top),
                 dp(Spacing.screen_x),
                 dp(Spacing.xl),
             ],

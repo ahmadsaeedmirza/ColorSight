@@ -81,10 +81,25 @@ class HomeScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(name="home", **kwargs)
         self._filter = "All"
+        self._chips = None
         self._build()
+        self.bind(on_pre_enter=self._on_pre_enter)
+
+    def _on_pre_enter(self, *_a):
+        self._reset_chip_scroll()
+
+    def _reset_chip_scroll(self):
+        from kivy.clock import Clock
+
+        def _go(_dt=None):
+            if self._chips is not None and hasattr(self._chips, "reset_scroll"):
+                self._chips.reset_scroll()
+
+        Clock.schedule_once(_go, 0)
 
     def apply_theme(self):
         self._build()
+        self._reset_chip_scroll()
 
     def _open(self, screen_name):
         def _handler(_card=None):
@@ -120,7 +135,7 @@ class HomeScreen(Screen):
             orientation="vertical",
             padding=[
                 dp(Spacing.screen_x),
-                dp(Spacing.lg),
+                dp(Spacing.safe_top),
                 0,
                 dp(Spacing.nav_clearance),
             ],
@@ -168,7 +183,9 @@ class HomeScreen(Screen):
             selected="All",
         )
         chips.change_cb = self._on_chip
+        self._chips = chips
         self._content.add_widget(chips)
+        self._reset_chip_scroll()
 
         self._grid_host = BoxLayout(orientation="vertical", size_hint_y=None, height=dp(1))
         self._content.add_widget(_right_pad(self._grid_host))

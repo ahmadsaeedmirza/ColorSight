@@ -12,7 +12,11 @@ from colorsight.widgets.primary_button import RoundIconButton
 
 
 class ScreenHeader(BoxLayout):
-    """Back button with a clear gap before the title; ≥44 dp tap target."""
+    """Back button with a clear gap before the title; ≥44 dp tap target.
+
+    Always includes ``Spacing.safe_top`` / ``screen_top`` so titles clear the
+    status bar / notch on edge-to-edge Android.
+    """
 
     def __init__(
         self,
@@ -21,13 +25,13 @@ class ScreenHeader(BoxLayout):
         show_back: bool = True,
         on_back=None,
         trailing=None,
-        include_top_inset: bool = False,
+        include_top_inset: bool = True,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.orientation = "horizontal"
         self.size_hint_y = None
-        top = dp(Spacing.screen_top) if include_top_inset else 0
+        top = dp(Spacing.safe_top if include_top_inset else 0)
         self.padding = [0, top, 0, 0]
         self.height = dp(48) + top
         self.spacing = dp(Spacing.header_gap)

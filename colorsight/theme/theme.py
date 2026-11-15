@@ -84,7 +84,7 @@ class ThemeController(EventDispatcher):
     resolved = StringProperty("light")
     revision = NumericProperty(0)
 
-    def set_preference(self, pref: str, *, persist: bool = True):
+    def set_preference(self, pref: str, *, persist: bool = True, return_to: str | None = "settings"):
         pref = (pref or "system").lower()
         if pref not in ("system", "light", "dark"):
             pref = "system"
@@ -98,9 +98,9 @@ class ThemeController(EventDispatcher):
                 save_prefs(data)
             except Exception as exc:
                 log.warning("theme pref save failed: %s", exc)
-        self.apply()
+        self.apply(rebuild=True, return_to=return_to)
 
-    def apply(self):
+    def apply(self, *, rebuild: bool = True, return_to: str | None = None):
         if self.preference == "dark":
             resolved = "dark"
         elif self.preference == "light":
@@ -109,14 +109,18 @@ class ThemeController(EventDispatcher):
             resolved = "dark" if system_prefers_dark() else "light"
         apply_color_set(resolved)
         self.resolved = resolved
-        self.revision += 1
         from colorsight.theme.tokens import Colors
 
         Window.clearcolor = Colors.bg
-        app = App.get_running_app()
-        if app is not None and getattr(app, "root", None) is not None:
-            _refresh_tree(app.root)
+        self.revision += 1
         log.info("theme applied preference=%s resolved=%s", self.preference, resolved)
+
+        app = App.get_running_app()
+        if rebuild and app is not None and hasattr(app, "rebuild_ui"):
+            # Full in-process UI rebuild so canvas colors cannot stay stale
+            app.rebuild_ui(return_to=return_to)
+        elif app is not None and getattr(app, "root", None) is not None:
+            _refresh_tree(app.root)
 
 
 _controller: ThemeController | None = None
@@ -130,9 +134,9 @@ def get_theme() -> ThemeController:
 
 
 def _refresh_tree(root):
+    """Legacy walk — used only when rebuild_ui is unavailable."""
     from colorsight.theme.tokens import Colors
 
-    # Root opaque bg
     if hasattr(root, "_bg") and hasattr(root, "_bg_color"):
         try:
             root._bg_color.rgba = Colors.bg

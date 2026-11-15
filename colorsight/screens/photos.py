@@ -130,11 +130,11 @@ class PhotosScreen(Screen):
         )
         header.padding = [
             dp(Spacing.screen_x),
-            dp(Spacing.screen_top),
+            dp(Spacing.safe_top),
             dp(Spacing.screen_x),
             0,
         ]
-        header.height = dp(48) + dp(Spacing.screen_top)
+        header.height = dp(48) + dp(Spacing.safe_top)
         self._root.add_widget(header)
 
         self._body = BoxLayout(

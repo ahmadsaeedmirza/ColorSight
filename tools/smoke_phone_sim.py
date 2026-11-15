@@ -10,6 +10,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 os.environ["KIVY_METRICS_DENSITY"] = "1.375"
+os.environ.setdefault("COLORSIGHT_INSET_TOP", "28")
+os.environ.setdefault("COLORSIGHT_INSET_BOTTOM", "24")
 
 from kivy.config import Config  # noqa: E402
 
@@ -23,6 +25,9 @@ from kivy.metrics import Metrics, dp  # noqa: E402
 
 from colorsight.app import ColorSightApp  # noqa: E402
 from colorsight.prefs import mark_onboarding_done  # noqa: E402
+from colorsight.safe_area import set_debug_insets  # noqa: E402
+from colorsight.theme.theme import get_theme  # noqa: E402
+from colorsight.theme.tokens import Spacing  # noqa: E402
 from colorsight.widgets.primary_button import PrimaryButton  # noqa: E402
 from colorsight.widgets.pastel_card import PastelCard  # noqa: E402
 from colorsight.widgets.screen_header import ScreenHeader  # noqa: E402
@@ -36,6 +41,7 @@ def main() -> None:
     prefs.parent.mkdir(parents=True, exist_ok=True)
     prefs.write_text('{"onboarding_done": true}', encoding="utf-8")
 
+    set_debug_insets(28, 24)
     app = ColorSightApp()
     notes: list[str] = []
     idx = {"i": 0}
@@ -70,11 +76,16 @@ def main() -> None:
     def step(_dt):
         mark_onboarding_done()
         Window.size = (540, 1200)
-        sm = app.root.sm
 
         def visit(_dt2):
             i = idx["i"]
             if i >= len(SCREENS):
+                # Theme flip pass (light → dark → light) without leaving the sim
+                get_theme().set_preference("dark", persist=False, return_to="home")
+                get_theme().set_preference("light", persist=False, return_to="home")
+                notes.append(
+                    f"insets:top={Spacing.safe_top}:bottom={Spacing.safe_bottom}"
+                )
                 print(
                     "SMOKE_PHONE_SIM",
                     f"density={Metrics.density:.3f}",
@@ -84,9 +95,11 @@ def main() -> None:
                 app.stop()
                 return
             name = SCREENS[i]
-            sm.current = name
+            app.root.sm.current = name
             idx["i"] = i + 1
-            Clock.schedule_once(lambda dt: (check_screen(name), Clock.schedule_once(visit, 0.25)), 0.35)
+            Clock.schedule_once(
+                lambda dt: (check_screen(name), Clock.schedule_once(visit, 0.25)), 0.35
+            )
 
         Clock.schedule_once(visit, 0.4)
 

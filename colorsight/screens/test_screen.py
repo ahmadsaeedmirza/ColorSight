@@ -25,6 +25,14 @@ from core import (
     score_trivector,
     severity_label,
 )
+from colorsight.prefs import (
+    clear_test_tutorial_seen,
+    consume_tutorial_force,
+    is_test_tutorial_seen,
+    mark_test_tutorial_seen,
+)
+from colorsight.screens.photo_widgets import TextLinkButton
+from colorsight.screens.test_tutorial import VisionTestTutorial
 from colorsight.theme.tokens import Colors, Fonts, Spacing
 from colorsight.widgets import PastelCard, PrimaryButton, ScreenHeader
 from colorsight.screens.test_widgets import (
@@ -81,7 +89,10 @@ class TestScreen(Screen):
         self._show_checklist()
 
     def _on_enter(self, *_a):
-        if self._phase in ("intro", "checklist", "results"):
+        if consume_tutorial_force():
+            self._show_tutorial()
+            return
+        if self._phase in ("intro", "checklist", "results", "tutorial"):
             self._show_checklist()
 
     def _on_leave(self, *_a):
@@ -139,7 +150,7 @@ class TestScreen(Screen):
             orientation="vertical",
             padding=[
                 dp(Spacing.screen_x),
-                dp(Spacing.md),
+                dp(Spacing.sm),
                 dp(Spacing.screen_x),
                 dp(Spacing.nav_clearance),
             ],
@@ -182,15 +193,47 @@ class TestScreen(Screen):
         )
         start = PrimaryButton(text="Start test")
         start.bg_color = Colors.accent_blue
-        start.on_press_cb = lambda *_: self._start_trivector()
+        start.on_press_cb = lambda *_: self._on_start_pressed()
+        replay = TextLinkButton(text="Replay tutorial")
+        replay.color = Colors.accent_blue
+        replay.bind(on_release=lambda *_: self._replay_tutorial())
         self._body.add_widget(
             self._padded_scroll(
                 self._header("Vision Test"),
                 card,
                 about,
                 start,
+                replay,
             )
         )
+
+    def _on_start_pressed(self):
+        if not is_test_tutorial_seen():
+            self._show_tutorial()
+            return
+        self._start_trivector()
+
+    def _replay_tutorial(self):
+        clear_test_tutorial_seen()
+        self._show_tutorial()
+
+    def _show_tutorial(self):
+        self._phase = "tutorial"
+        self._clear()
+        header = self._header("Vision Test")
+        tutorial = VisionTestTutorial(
+            finish_cb=self._tutorial_done,
+            skip_cb=self._tutorial_done,
+            size_hint_y=None,
+        )
+        tutorial.bind(minimum_height=tutorial.setter("height"))
+        self._body.add_widget(
+            self._padded_scroll(header, tutorial, spacing=Spacing.sm)
+        )
+
+    def _tutorial_done(self):
+        mark_test_tutorial_seen()
+        self._start_trivector()
 
     def _start_trivector(self):
         self._clear()
