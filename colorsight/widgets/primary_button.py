@@ -25,22 +25,41 @@ class PrimaryButton(ButtonBehavior, BoxLayout):
         self.text = text
         self.size_hint_y = None
         self.height = dp(52)
-        self.padding = [dp(20), dp(12)]
+        self.padding = [dp(16), dp(12), dp(16), dp(12)]
 
         self._label = Label(
             text=self.text,
             font_name=Fonts.semibold,
-            font_size=dp(16),
+            font_size=dp(15),
             color=self.text_color,
+            halign="center",
+            valign="middle",
+            size_hint=(1, 1),
         )
         self.add_widget(self._label)
         self.bind(
             pos=self._redraw,
-            size=self._redraw,
+            size=self._fit_and_redraw,
             bg_color=self._redraw,
-            text=lambda *_: setattr(self._label, "text", self.text),
+            text=self._on_text,
             text_color=lambda *_: setattr(self._label, "color", self.text_color),
         )
+        self._fit_and_redraw()
+
+    def _on_text(self, *_args):
+        self._label.text = self.text
+        self._fit_and_redraw()
+
+    def _fit_and_redraw(self, *_args):
+        """Keep label inside the button: wrap to width; grow height if needed."""
+        pad_x = (self.padding[0] + self.padding[2]) if self.padding else 0
+        pad_y = (self.padding[1] + self.padding[3]) if self.padding else 0
+        wrap_w = max(1, self.width - pad_x) if self.width > pad_x else 1
+        self._label.text_size = (wrap_w, None)
+        self._label.texture_update()
+        th = max(dp(18), self._label.texture_size[1])
+        # Prefer single-line look; if wrap needs more room, grow the button
+        self.height = max(dp(52), th + pad_y)
         self._redraw()
 
     def _redraw(self, *_args):

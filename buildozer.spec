@@ -18,7 +18,7 @@ requirements = python3,kivy,numpy,opencv,pillow,pyjnius,android,camera4kivy
 
 orientation = portrait
 fullscreen = 0
-android.api = 33
+android.api = 35
 android.minapi = 24
 # p4a 2026.05.09 recommends NDK 28c; 25b fails NumPy 2.3 (libc++ unique.cpp).
 android.ndk = 28c

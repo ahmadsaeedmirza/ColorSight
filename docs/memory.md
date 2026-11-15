@@ -4,6 +4,18 @@ Newest entries first. Append after every prompt per `rules.md`.
 
 ---
 
+## 2026-11-15 — Android full-screen layout + API 35
+
+**Prompt:** APK UI stuck in ~390 px bottom-left box on 1080×2400; Welcome clipping/overlap; Play Protect older-Android note; phone-density desktop sim. No `/core` / vision-test / test changes.
+
+**Cause / fix:** Desktop `Window.size=(390,844)` applied on Android. `main.py` sets Config graphics **only** if `platform not in ('android','ios')`; `app.py` no longer sets `Window.size`. `PrimaryButton` wraps label + grows height; Welcome tip above arrow, cards `auto_height=True`.
+
+**Build:** `android.api = 35` (min 24). Phone sim: `tools/run_phone_sim.py` + `tools/smoke_phone_sim.py` (540×1200 @ density 1.375).
+
+**Docs:** `production.md` pitfalls (layout box, Play Protect, uninstall for new debug key), phone-sim section; `design.md` Welcome; `rules.md` / others. Commit + push `master`.
+
+---
+
 ## 2026-11-15 — Fix CI charset-normalizer via PIP_CONSTRAINT
 
 **Prompt:** GHA run #1 failed at p4a pip install — dry-run resolver ignored `buildozer.spec` pin and picked charset-normalizer 3.5.2’s `android_24_arm64_v8a` wheel; host pip rejected it. No `/core` / vision-test / test changes.

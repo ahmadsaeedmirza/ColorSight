@@ -14,7 +14,7 @@ pip install -r requirements.txt
 python main.py
 ```
 
-Window size defaults to a phone-like portrait frame for layout checks (OS DPI may scale the actual pixel size). Resize is allowed; screens should remain usable.
+Desktop (`main.py`): Config graphics default **390×844** (resizable) **only when not android/ios**. For phone-density checks use `python tools/run_phone_sim.py` (540×1200 @ density 1.375).
 
 ### Core engine unit tests
 
@@ -122,11 +122,26 @@ Workflow file: `.github/workflows/android.yml` (ubuntu-22.04, Java 17, `cython==
 
 On a **successful** run: open the workflow run → **Artifacts** → download **`colorsight-apk`** (contains `bin/*.apk`, arm64-v8a debug).
 
-Install with:
+**Uninstall the previous debug build first.** Each cloud run signs with a **new debug keystore**, so `adb install -r` often fails with a signature mismatch. Remove the old app, then install:
 
 ```bash
-adb install -r colorsight-*-arm64-v8a-debug.apk
+adb uninstall org.colorsight.colorsight
+adb install colorsight-*-arm64-v8a-debug.apk
 ```
+
+**Play Protect** may warn that the app was “built for an older version of Android” or is unrecognized — expected for **debug** APKs (and until `android.api` tracks current Play targets). Tap *More details → Install anyway* (or equivalent). Release builds with a proper target SDK + upload key are a later step.
+
+### Desktop phone-density layout check
+
+Before building, catch scaling/clipping bugs:
+
+```bash
+python tools/run_phone_sim.py
+# Automated pass over Welcome/Home/Test/Photos/Camera/Profile/Settings:
+python tools/smoke_phone_sim.py   # → SMOKE_PHONE_SIM …
+```
+
+Sim: **540×1200** window at **`KIVY_METRICS_DENSITY=1.375`** (half-scale of 1080×2400 @ density 2.75). `main.py` only sets the 390×844 desktop window when `platform` is not android/ios — never touch `Window.size` on device.
 
 ### If the build fails
 
@@ -143,6 +158,9 @@ adb install -r colorsight-*-arm64-v8a-debug.apk
 | `charset-normalizer` android wheel on host pip | p4a **drops** `requirements=` pins for pure-Python pip modules, so a `buildozer.spec` pin is ignored. Use repo-root **`constraints.txt`** (`charset-normalizer==3.4.9`) and set **`PIP_CONSTRAINT`** on the Buildozer step (see workflow) so every pip call — including the dry-run resolver — honors it |
 | Corrupt Buildozer / p4a venv | Delete the bad env under `.buildozer/` (or clear the Actions cache for `buildozer-*`) and rebuild clean |
 | Old kivy/numpy/pillow pins on Python 3.14 | Keep those **unpinned**; single `version = 0.1.0` (no `version.regex`) |
+| **UI stuck in a ~390 px box (bottom-left) on phone** | Desktop `Window.size` / Config **390×844** was also applied on Android. Guard with `platform not in ('android','ios')` in `main.py`; never set window size in `app.py` on device. Use `tools/run_phone_sim.py` to catch this |
+| Play Protect / “older Android” on install | Normal for **debug** APKs; install anyway. Target SDK is `android.api = 35` (min 24) |
+| `INSTALL_FAILED_UPDATE_INCOMPATIBLE` | New debug key each CI run — **uninstall** `org.colorsight.colorsight` before installing |
 
 Local WSL steps below remain as a **fallback** if Actions is unavailable.
 
@@ -323,7 +341,7 @@ Must ship with the APK:
 ## `buildozer.spec` highlights
 
 - Title **ColorSight**; `org.colorsight.colorsight`; single **`version = 0.1.0`** (no `version.regex` / `version.filename`)
-- Portrait; api 33 / min 24; **`android.archs = arm64-v8a`** (64-bit only); **`android.ndk = 28c`**
+- Portrait; **`android.api = 35`** / min 24; **`android.archs = arm64-v8a`** (64-bit only); **`android.ndk = 28c`**
 - Requirements: `python3,kivy,numpy,opencv,pillow,pyjnius,android,camera4kivy` — do not re-add old kivy/numpy/pillow `==` pins; charset-normalizer via `constraints.txt` + `PIP_CONSTRAINT` in CI
 - CAMERA + READ_MEDIA_IMAGES (+ legacy storage); FileProvider via `android.add_resources`; icon / adaptive / cream splash
 - Cloud CI: `.github/workflows/android.yml` (manual + `build-apk` branch); failure artifacts: last 1500 lines + full log (3-day retention)

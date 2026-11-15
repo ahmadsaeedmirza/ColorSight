@@ -6,7 +6,6 @@ from kivy.metrics import dp
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.screenmanager import FadeTransition, ScreenManager
 from kivy.graphics import Color, Rectangle
-
 from colorsight.prefs import is_first_run
 from colorsight.theme import register_fonts
 from colorsight.theme.tokens import Colors, Spacing
@@ -22,8 +21,8 @@ from colorsight.screens import (
     SettingsScreen,
 )
 
-# Phone-like default for desktop layout checks
-Window.size = (390, 844)
+# Window size: set only via Config in main.py / tools (desktop). Never resize
+# on Android/iOS — a fixed 390×844 box was clipping the APK UI into a corner.
 Window.clearcolor = Colors.bg
 
 # Back stack for consistent navigation

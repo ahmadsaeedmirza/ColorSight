@@ -163,7 +163,7 @@ Apply the **same** clamped value to fill **and** matching shadow layers. Used by
 
 | Screen id | Purpose |
 |-----------|---------|
-| `welcome` | Big title, subtitle, dark arrow CTA, stacked pastel feature cards |
+| `welcome` | Full-bleed scroll: title, wrapping subtitle, CTA that fits its button, tip, then arrow, then auto-height pastel cards (no overlap with tip/dots) |
 | `home` | Header (menu + avatar), chips, pastel feature grid |
 | `test` | **Vision test** — checklist → Trivector Landolt C → hue arrange → results (Save profile) |
 | `photos` | **Image correction** — Corrected @ 0% divider by default, Strength, save/share, comparison |
@@ -210,8 +210,10 @@ Use `auto_height=True` when the subtitle must wrap fully: subtitle `text_size` f
 
 ### Welcome
 
-- Light background; Lexend title; Material `arrow_forward` CTA
-- Stacked pastel cards; no floating nav (hidden)
+- Light background; Lexend title; primary CTA label wraps/grows inside the button (never overflows)
+- Tip text above the dark `arrow_forward` skip control; clear gap before stacked `PastelCard(auto_height=True)` so tip never collides with accent dots
+- ScrollView for small heights; no floating nav (hidden)
+- **Desktop window / density:** Config 390×844 only on desktop (`main.py`). Phone layout checks: `tools/run_phone_sim.py` (540×1200 @ density 1.375). Never apply desktop window size on Android
 
 ### Home
 

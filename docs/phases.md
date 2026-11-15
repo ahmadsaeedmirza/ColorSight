@@ -28,6 +28,7 @@
 | Buildozer pin `charset-normalizer==3.4.9` (host-pip android wheel) | Superseded — use `PIP_CONSTRAINT` |
 | GitHub Actions cloud Android APK workflow | Done |
 | CI `constraints.txt` + `PIP_CONSTRAINT` for charset-normalizer | Done |
+| Android full-screen layout (no desktop Window.size) + API 35 + phone sim | Done |
 
 Stack: NumPy + OpenCV in `core/`, Kivy UI in `colorsight/`, Buildozer packaging.
 

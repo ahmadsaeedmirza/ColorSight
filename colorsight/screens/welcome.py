@@ -27,12 +27,12 @@ class WelcomeScreen(Screen):
                 parent.set_nav_active(target)
 
     def _build(self):
-        scroll = ScrollView(do_scroll_x=False, bar_width=0)
+        scroll = ScrollView(do_scroll_x=False, bar_width=0, size_hint=(1, 1))
         content = BoxLayout(
             orientation="vertical",
             padding=[
                 dp(Spacing.screen_x),
-                dp(Spacing.xl),
+                dp(Spacing.lg),
                 dp(Spacing.screen_x),
                 dp(Spacing.xl),
             ],
@@ -40,8 +40,6 @@ class WelcomeScreen(Screen):
             size_hint_y=None,
         )
         content.bind(minimum_height=content.setter("height"))
-
-        content.add_widget(Widget(size_hint_y=None, height=dp(12)))
 
         title = Label(
             text="ColorSight",
@@ -52,12 +50,18 @@ class WelcomeScreen(Screen):
             valign="middle",
             size_hint_y=None,
             height=dp(52),
+            shorten=True,
+            shorten_from="right",
+            max_lines=1,
         )
         title.bind(size=lambda *_: setattr(title, "text_size", title.size))
         content.add_widget(title)
 
         subtitle = Label(
-            text="See colors more clearly — start with a short\nvision check, then correct photos and live video.",
+            text=(
+                "See colors more clearly — start with a short "
+                "vision check, then correct photos and live video."
+            ),
             font_name=Fonts.regular,
             font_size=dp(15),
             color=Colors.text_muted,
@@ -66,19 +70,18 @@ class WelcomeScreen(Screen):
             size_hint_y=None,
             height=dp(56),
         )
-        subtitle.bind(size=lambda *_: setattr(subtitle, "text_size", subtitle.size))
+
+        def _fit_sub(*_a):
+            subtitle.text_size = (max(1, subtitle.width), None)
+            subtitle.texture_update()
+            subtitle.height = max(dp(40), subtitle.texture_size[1] + dp(4))
+
+        subtitle.bind(size=_fit_sub, texture_size=_fit_sub)
         content.add_widget(subtitle)
 
         cta = PrimaryButton(text="Start with the color test")
         cta.on_press_cb = lambda *_: self._finish("test")
         content.add_widget(cta)
-
-        skip_row = BoxLayout(orientation="horizontal", size_hint_y=None, height=dp(56))
-        skip_row.add_widget(Widget())
-        arrow = RoundIconButton(icon=Icons.arrow_forward, diameter=48)
-        arrow.on_press_cb = lambda *_: self._finish("home")
-        skip_row.add_widget(arrow)
-        content.add_widget(skip_row)
 
         tip = Label(
             text="You can explore Home anytime — the arrow skips to the toolkit.",
@@ -88,9 +91,26 @@ class WelcomeScreen(Screen):
             size_hint_y=None,
             height=dp(36),
             halign="left",
+            valign="top",
         )
-        tip.bind(size=lambda *_: setattr(tip, "text_size", tip.size))
+
+        def _fit_tip(*_a):
+            tip.text_size = (max(1, tip.width), None)
+            tip.texture_update()
+            tip.height = max(dp(28), tip.texture_size[1] + dp(4))
+
+        tip.bind(size=_fit_tip, texture_size=_fit_tip)
         content.add_widget(tip)
+
+        # Arrow CTA — below tip so tip never collides with card accent dots
+        skip_row = BoxLayout(orientation="horizontal", size_hint_y=None, height=dp(56))
+        skip_row.add_widget(Widget())
+        arrow = RoundIconButton(icon=Icons.arrow_forward, diameter=48)
+        arrow.on_press_cb = lambda *_: self._finish("home")
+        skip_row.add_widget(arrow)
+        content.add_widget(skip_row)
+
+        content.add_widget(Widget(size_hint_y=None, height=dp(Spacing.sm)))
 
         cards = [
             ("Vision Test", "Find your color vision profile", "yellow"),
@@ -105,7 +125,7 @@ class WelcomeScreen(Screen):
                     subtitle=sub,
                     palette=palette,
                     size_hint_y=None,
-                    height=dp(100),
+                    auto_height=True,
                     radius=Radii.card_lg,
                 )
             )
