@@ -130,9 +130,9 @@ adb install -r colorsight-*-arm64-v8a-debug.apk
 
 ### If the build fails
 
-1. Open the failed run → **Artifacts** → download **`colorsight-build-failure-log`** (last **500** lines of `buildozer-ci.log`, plus any extra p4a log tails).
-2. Match the error to the troubleshooting table below (FreeType, NDK, charset-normalizer, pins).
-3. Fix `buildozer.spec` / docs as needed, push, and re-run the workflow (cache makes reruns faster).
+1. Open the failed run → **Artifacts** → download **`colorsight-build-failure-log`** (last **1500** lines) and/or **`colorsight-build-full-log`** (full `buildozer-ci.log`, 3-day retention).
+2. Match the error to the troubleshooting table below (FreeType, NDK, `PIP_CONSTRAINT` / charset-normalizer, pins).
+3. Fix `constraints.txt` / `buildozer.spec` / workflow as needed, push, and re-run (cache makes reruns faster).
 
 ### Known cloud / Buildozer pitfalls
 
@@ -140,7 +140,7 @@ adb install -r colorsight-*-arm64-v8a-debug.apk
 |---------|------------|
 | FreeType download blocked (Savannah) | Manual SourceForge `.tar.gz` + `.mark-…` (see troubleshooting) — rare on GitHub runners; more common on restricted networks |
 | NDK 25b / NumPy `unordered_map` | Use **`android.ndk = 28c`** |
-| `charset-normalizer` android wheel on host pip | Pin **`charset-normalizer==3.4.9`** |
+| `charset-normalizer` android wheel on host pip | p4a **drops** `requirements=` pins for pure-Python pip modules, so a `buildozer.spec` pin is ignored. Use repo-root **`constraints.txt`** (`charset-normalizer==3.4.9`) and set **`PIP_CONSTRAINT`** on the Buildozer step (see workflow) so every pip call — including the dry-run resolver — honors it |
 | Corrupt Buildozer / p4a venv | Delete the bad env under `.buildozer/` (or clear the Actions cache for `buildozer-*`) and rebuild clean |
 | Old kivy/numpy/pillow pins on Python 3.14 | Keep those **unpinned**; single `version = 0.1.0` (no `version.regex`) |
 
@@ -239,9 +239,9 @@ Sign with a proper keystore before Play Store distribution (not configured yet).
 | Symptom | What to try |
 |---------|-------------|
 | **download.savannah.gnu.org unreachable (FreeType)** | p4a cannot fetch FreeType from Savannah. Manual workaround: download `freetype-2.14.1.tar.xz` from [downloads.sourceforge.net/freetype/freetype2/2.14.1/](https://downloads.sourceforge.net/freetype/freetype2/2.14.1/); convert it to `.tar.gz`; place it in `.buildozer/android/platform/build-arm64-v8a/packages/freetype/` (or `build-arm64-v8a_armeabi-v7a/…` if you still have a dual-arch tree); then `touch .mark-freetype-2.14.1.tar.gz` in that same folder and rebuild |
-| **Version pins break the build on new p4a** | python-for-android **2026.05.09** defaults to **Python 3.14**. Old pins (`kivy==2.3.0`, `numpy==1.26.4`, `pillow==10.4.0`) fail on 3.14; the numpy pin also fails because the recipe looks for git tag `1.26.4` while the tag is `v1.26.4`. Fix: leave those unpinned in `buildozer.spec` (desktop `requirements.txt` alone). The only intentional pin is `charset-normalizer==3.4.9` (see row below). Clean `.buildozer` if a failed pin left a bad cache |
+| **Version pins break the build on new p4a** | python-for-android **2026.05.09** defaults to **Python 3.14**. Old pins (`kivy==2.3.0`, `numpy==1.26.4`, `pillow==10.4.0`) fail on 3.14; the numpy pin also fails because the recipe looks for git tag `1.26.4` while the tag is `v1.26.4`. Fix: leave those unpinned in `buildozer.spec` (desktop `requirements.txt` alone). Clean `.buildozer` if a failed pin left a bad cache |
 | **NumPy fails with `no template named unordered_map`** | NDK **25b** libc++ is too old for NumPy 2.3 (`unique.cpp` missing an include). Use **`android.ndk = 28c`** (what p4a 2026.05.09 recommends). Clean the NDK/build cache and rebuild |
-| **`charset-normalizer` / “is not a supported wheel on this platform”** | p4a may resolve **3.5.2** to an `android_24_arm64_v8a` wheel that **host pip cannot install**. Pin the last pure-Python release: `charset-normalizer==3.4.9` in `buildozer.spec` requirements (keep other deps unpinned) |
+| **`charset-normalizer` / “is not a supported wheel on this platform”** | p4a resolves pure-Python helpers with `pip … --dry-run --platform=android_24_arm64_v8a` and **ignores** `buildozer.spec` version pins for those modules, so it picks **3.5.2**’s android wheel that host pip cannot install. Fix: `constraints.txt` with `charset-normalizer==3.4.9` + workflow env **`PIP_CONSTRAINT=${{ github.workspace }}/constraints.txt`** (do not put the pin back in `requirements`) |
 | OpenCV recipe fails | Keep unpinned `opencv` in requirements; clean `.buildozer` and rebuild; ensure NDK **28c** matches `android.ndk` |
 | NDK/SDK download stuck | Check disk space (~20+ GB); retry; set `ANDROIDSDK` / `ANDROIDNDK` if you already have them |
 | Cython / Kivy mismatch | Prefer unpinned `kivy` (recipe picks a 3.14-compatible build); `pip3 install --user 'cython<3'` only if an older recipe still needs it |
@@ -312,7 +312,7 @@ Must ship with the APK:
 ## Known issues / notes
 
 - **Buildozer on Windows**: use WSL2 (above); expect long first builds.
-- **p4a 2026.05.09**: defaults to Python 3.14; keep recipe deps unpinned except `charset-normalizer==3.4.9`; use NDK **28c** and **arm64-v8a only** (see troubleshooting).
+- **p4a 2026.05.09**: defaults to Python 3.14; keep recipe deps unpinned; constrain charset-normalizer via **`PIP_CONSTRAINT` / `constraints.txt`**; use NDK **28c** and **arm64-v8a only** (see troubleshooting).
 - **APK is 64-bit only** (`arm64-v8a`) — covers almost all current phones; no `armeabi-v7a` slice.
 - **Python 3.13 desktop**: if Kivy wheels fail, use 3.11/3.12 in the venv.
 - **Camera4Kivy**: desktop uses OpenCV; Android Preview widget callback may need a device pass to fully wire `AndroidCameraSource.push_frame_rgb`.
@@ -324,6 +324,6 @@ Must ship with the APK:
 
 - Title **ColorSight**; `org.colorsight.colorsight`; single **`version = 0.1.0`** (no `version.regex` / `version.filename`)
 - Portrait; api 33 / min 24; **`android.archs = arm64-v8a`** (64-bit only); **`android.ndk = 28c`**
-- Requirements: `python3,kivy,numpy,opencv,pillow,pyjnius,android,camera4kivy,charset-normalizer==3.4.9` — do not re-add old kivy/numpy/pillow `==` pins
+- Requirements: `python3,kivy,numpy,opencv,pillow,pyjnius,android,camera4kivy` — do not re-add old kivy/numpy/pillow `==` pins; charset-normalizer via `constraints.txt` + `PIP_CONSTRAINT` in CI
 - CAMERA + READ_MEDIA_IMAGES (+ legacy storage); FileProvider via `android.add_resources`; icon / adaptive / cream splash
-- Cloud CI: `.github/workflows/android.yml` (manual + `build-apk` branch)
+- Cloud CI: `.github/workflows/android.yml` (manual + `build-apk` branch); failure artifacts: last 1500 lines + full log (3-day retention)

@@ -9,11 +9,12 @@ source.include_patterns = assets/*,assets/fonts/*,assets/icons/*,assets/android/
 
 version = 0.1.0
 
-# Desktop deps stay in requirements.txt. Android: leave kivy/numpy/pillow/etc.
-# unpinned for p4a 2026.05.09 / Python 3.14. Exception: pin charset-normalizer
-# to the last pure-Python release — 3.5.2 resolves to an android_24_arm64_v8a
-# wheel that host pip cannot install ("is not a supported wheel on this platform").
-requirements = python3,kivy,numpy,opencv,pillow,pyjnius,android,camera4kivy,charset-normalizer==3.4.9
+# Desktop deps stay in requirements.txt. Android: leave recipe deps unpinned for
+# p4a 2026.05.09 / Python 3.14. Do NOT pin charset-normalizer here — p4a drops
+# pins for pure-Python pip modules. CI uses constraints.txt + PIP_CONSTRAINT
+# (charset-normalizer==3.4.9) so the dry-run resolver cannot pick 3.5.2's
+# android_24_arm64_v8a wheel that host pip cannot install.
+requirements = python3,kivy,numpy,opencv,pillow,pyjnius,android,camera4kivy
 
 orientation = portrait
 fullscreen = 0

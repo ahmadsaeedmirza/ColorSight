@@ -4,6 +4,16 @@ Newest entries first. Append after every prompt per `rules.md`.
 
 ---
 
+## 2026-11-15 — Fix CI charset-normalizer via PIP_CONSTRAINT
+
+**Prompt:** GHA run #1 failed at p4a pip install — dry-run resolver ignored `buildozer.spec` pin and picked charset-normalizer 3.5.2’s `android_24_arm64_v8a` wheel; host pip rejected it. No `/core` / vision-test / test changes.
+
+**Fix:** Repo-root `constraints.txt` (`charset-normalizer==3.4.9`); workflow sets `PIP_CONSTRAINT` on the buildozer step + prints constraints before build; removed pin from `buildozer.spec` requirements (now exactly `python3,kivy,numpy,opencv,pillow,pyjnius,android,camera4kivy`). Failure artifacts: last **1500** lines + full `buildozer-ci.log` (retention 3 days).
+
+**Docs:** `production.md` pitfalls/troubleshooting updated (p4a drops pip-module pins → use `PIP_CONSTRAINT`); `rules.md` / `architecture.md` / `phases.md` / this entry. Commit + push to `master`.
+
+---
+
 ## 2026-11-15 — GitHub Actions cloud Android build
 
 **Prompt:** Cloud Android build via GitHub Actions; never require local builds. No `/core` / vision-test / existing-test changes.

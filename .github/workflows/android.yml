@@ -67,15 +67,25 @@ jobs:
           path: |
             ~/.buildozer
             ./.buildozer
-          key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
+          key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec', 'constraints.txt') }}
           restore-keys: |
             buildozer-${{ runner.os }}-
 
+      - name: Show PIP_CONSTRAINT
+        run: |
+          set -euo pipefail
+          echo "PIP_CONSTRAINT=${{ github.workspace }}/constraints.txt"
+          echo "--- constraints.txt ---"
+          cat constraints.txt
+
       - name: Build debug APK
         id: build
+        env:
+          PIP_CONSTRAINT: ${{ github.workspace }}/constraints.txt
         run: |
           set -euo pipefail
           mkdir -p bin dist
+          echo "PIP_CONSTRAINT=${PIP_CONSTRAINT}"
           buildozer -v android debug 2>&1 | tee buildozer-ci.log
           ls -la bin/*.apk
 
@@ -87,26 +97,36 @@ jobs:
           path: bin/*.apk
           if-no-files-found: error
 
-      - name: Upload build log tail (failure)
+      - name: Prepare failure logs
         if: failure()
         run: |
           set -euo pipefail
           mkdir -p ci-failure
           if [ -f buildozer-ci.log ]; then
-            tail -n 500 buildozer-ci.log > ci-failure/buildozer-tail.txt
+            tail -n 1500 buildozer-ci.log > ci-failure/buildozer-tail.txt
+            cp buildozer-ci.log ci-failure/buildozer-full.log
           else
             echo "No buildozer-ci.log captured" > ci-failure/buildozer-tail.txt
           fi
-          # Also grab common p4a log fragments if present
           find .buildozer -name "*.log" -type f 2>/dev/null | head -20 | while read -r f; do
             base=$(basename "$f")
             tail -n 200 "$f" > "ci-failure/extra-${base}.txt" || true
           done
 
-      - name: Upload failure logs artifact
+      - name: Upload failure log tail
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: colorsight-build-failure-log
-          path: ci-failure/
+          path: ci-failure/buildozer-tail.txt
           if-no-files-found: warn
+          retention-days: 3
+
+      - name: Upload full build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: colorsight-build-full-log
+          path: buildozer-ci.log
+          if-no-files-found: warn
+          retention-days: 3

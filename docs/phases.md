@@ -25,8 +25,9 @@
 | Buildozer.spec + icons/splash + WSL build guide + `tools/build_android.sh` | Done |
 | Buildozer requirements unpinned for p4a 2026.05.09 / Python 3.14 | Done |
 | Buildozer NDK 28c + arm64-v8a-only APK | Done |
-| Buildozer pin `charset-normalizer==3.4.9` (host-pip android wheel) | Done |
+| Buildozer pin `charset-normalizer==3.4.9` (host-pip android wheel) | Superseded — use `PIP_CONSTRAINT` |
 | GitHub Actions cloud Android APK workflow | Done |
+| CI `constraints.txt` + `PIP_CONSTRAINT` for charset-normalizer | Done |
 
 Stack: NumPy + OpenCV in `core/`, Kivy UI in `colorsight/`, Buildozer packaging.
 
