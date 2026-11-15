@@ -7,7 +7,7 @@
 | **Python 3** | App language | Course/project fit; NumPy/OpenCV ecosystem |
 | **Kivy** | UI | Desktop + Android via Buildozer; custom pastel UI |
 | **NumPy / OpenCV / Pillow** | Color + stimuli | CVD math; CIE u'v'; Landolt C / legacy plates |
-| **Buildozer** / **p4a** / **GHA** | Android packaging | Preferred: GitHub Actions. p4a **2026.05.09** → Python **3.14**, NDK **28c**, **arm64-v8a**, **`android.api=35`**; `PIP_CONSTRAINT`; desktop-only window Config (see `production.md`) |
+| **Buildozer** / **p4a** / **GHA** | Android packaging | Preferred: GitHub Actions. p4a **2026.05.09** → Python **3.14**, NDK **28c**, **arm64-v8a**, **`android.api=35`**; `PIP_CONSTRAINT`; wipe `build/venv` before each build (never cache it — see `production.md`) |
 | **Theme + logging** | UI chrome | `ThemeController` (system/light/dark); `NEUTRAL_BG` for test/preview accuracy; rotating log + Settings log viewer |
 
 ## Folder structure

@@ -67,9 +67,11 @@ jobs:
           path: |
             ~/.buildozer
             ./.buildozer
-          key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec', 'constraints.txt') }}
+            !.buildozer/android/platform/build-*/build/venv
+          # v2: never restore/save poisoned p4a build/venv (pip capture_logging crash)
+          key: buildozer-v2-${{ runner.os }}-${{ hashFiles('buildozer.spec', 'constraints.txt') }}
           restore-keys: |
-            buildozer-${{ runner.os }}-
+            buildozer-v2-${{ runner.os }}-
 
       - name: Show PIP_CONSTRAINT
         run: |
@@ -77,6 +79,14 @@ jobs:
           echo "PIP_CONSTRAINT=${{ github.workspace }}/constraints.txt"
           echo "--- constraints.txt ---"
           cat constraints.txt
+
+      # p4a runs `python -m venv` over an existing build/venv and corrupts pip
+      # (ImportError: capture_logging). Keep other_builds / python-installs cached.
+      - name: Remove p4a build venv before build
+        run: |
+          set -euo pipefail
+          rm -rf .buildozer/android/platform/build-*/build/venv
+          echo "Cleared p4a build/venv (if any); rest of .buildozer kept"
 
       - name: Build debug APK
         id: build

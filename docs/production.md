@@ -124,9 +124,9 @@ Build the debug APK in the cloud so you do **not** need a local Buildozer/WSL to
 3. Either:
    - **Run workflow** (`workflow_dispatch`), or
    - Push any commit to a branch named **`build-apk`**.
-4. Wait for the job (first run can take **1–3+ hours**; later runs reuse `~/.buildozer` + `./.buildozer` cache).
+4. Wait for the job (first run can take **1–3+ hours**; later runs reuse `~/.buildozer` + `./.buildozer` under cache key **`buildozer-v2-`**, excluding `build/venv`).
 
-Workflow file: `.github/workflows/android.yml` (ubuntu-22.04, Java 17, `cython==0.29.36`, `buildozer -v android debug`, timeout 360 min). After a successful build the job **verifies FileProvider** is present in the APK manifest (fails the run with a clear error if missing) and uploads a `fileprovider-manifest-dump` artifact.
+Workflow file: `.github/workflows/android.yml` (ubuntu-22.04, Java 17, `cython==0.29.36`, `buildozer -v android debug`, timeout 360 min). Before each build the job deletes `build/venv` so p4a cannot corrupt pip. After a successful build it **verifies FileProvider + CAMERA + CameraX** in the APK (fails with a clear error if missing).
 
 ### Download the APK
 
@@ -166,7 +166,8 @@ Sim: **540×1200** window at **`KIVY_METRICS_DENSITY=1.375`** (half-scale of 108
 | FreeType download blocked (Savannah) | Manual SourceForge `.tar.gz` + `.mark-…` (see troubleshooting) — rare on GitHub runners; more common on restricted networks |
 | NDK 25b / NumPy `unordered_map` | Use **`android.ndk = 28c`** |
 | `charset-normalizer` android wheel on host pip | p4a **drops** `requirements=` pins for pure-Python pip modules, so a `buildozer.spec` pin is ignored. Use repo-root **`constraints.txt`** (`charset-normalizer==3.4.9`) and set **`PIP_CONSTRAINT`** on the Buildozer step (see workflow) so every pip call — including the dry-run resolver — honors it |
-| Corrupt Buildozer / p4a venv | Delete the bad env under `.buildozer/` (or clear the Actions cache for `buildozer-*`) and rebuild clean |
+| **p4a `build/venv` + `capture_logging` ImportError** | p4a re-creates `build/venv` with `python -m venv` **on top of an existing one**, which mixes pip versions (`ImportError: cannot import name 'capture_logging'`). **Always** `rm -rf .buildozer/android/platform/build-*/build/venv` before a build (workflow + `tools/build_android.sh` do this). **Never cache** that venv (Actions cache uses `buildozer-v2-` + path exclusion). Keep `other_builds` / `python-installs` so rebuilds stay fast. |
+| Corrupt Buildozer / p4a tree | If wiping only `build/venv` is not enough, delete more of `.buildozer/` or clear the Actions `buildozer-v2-*` cache and rebuild |
 | Old kivy/numpy/pillow pins on Python 3.14 | Keep those **unpinned**; single `version = 0.1.0` (no `version.regex`) |
 | **UI stuck in a ~390 px box (bottom-left) on phone** | Desktop `Window.size` / Config **390×844** was also applied on Android. Guard with `platform not in ('android','ios')` in `main.py`; never set window size in `app.py` on device. Use `tools/run_phone_sim.py` to catch this |
 | **Black flash between screens** | Every `Screen` + root must paint an opaque themed (or neutral) bg in `canvas.before`; keep `Window.clearcolor` in sync with the theme |
@@ -282,7 +283,7 @@ Sign with a proper keystore before Play Store distribution (not configured yet).
 | Permission denied at runtime | CAMERA declared; request at runtime — use error card **Open settings** / **Retry** |
 | Share crashes | Ensure FileProvider authority `${applicationId}.fileprovider` and `@xml/file_paths` are in the final APK manifest |
 | `buildozer` not found | `pip3 install --user buildozer` and ensure `~/.local/bin` is on `PATH` |
-| Corrupt / half-built p4a venv | Delete `.buildozer/android/platform/build-*/build/venv` (or the whole `.buildozer` tree) and rebuild; on Actions, clear the `buildozer-*` cache then re-run |
+| Corrupt / half-built p4a venv (`capture_logging`) | Always delete `.buildozer/android/platform/build-*/build/venv` before buildozer (never cache it). If still broken, wipe `.buildozer` or clear Actions `buildozer-v2-*` cache |
 
 **NumPy on Android vs desktop:** p4a’s default numpy is **2.x**, which may differ from an older desktop pin. After bumping Android recipes, run `python -m unittest discover -s tests` against the latest numpy on desktop to confirm `/core` still passes (result logged in `memory.md`).
 

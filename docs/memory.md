@@ -4,6 +4,16 @@ Newest entries first. Append after every prompt per `rules.md`.
 
 ---
 
+## 2026-11-15 — Fix CI p4a build/venv pip corruption (run #3)
+
+**Prompt:** GHA run #3 failed: cache restored `.buildozer` including `build/venv`; p4a ran `python -m venv` over it; `pip install -U pip` → `ImportError: cannot import name 'capture_logging'`. Same on WSL re-runs. No `/core` / vision-test / app / existing-test changes. **Do not commit** (user pushes).
+
+**Fix:** Workflow deletes `.buildozer/android/platform/build-*/build/venv` before build; cache paths exclude that venv; cache key prefix → `buildozer-v2-` (poisoned `buildozer-` caches unused). Same `rm -rf` in `tools/build_android.sh`. `PIP_CONSTRAINT` unchanged.
+
+**Docs:** `production.md` pitfalls; `rules.md`; this entry.
+
+---
+
 ## 2026-11-15 — Real Android Camera / Lens (Camera4Kivy)
 
 **Prompt:** APK Camera/Lens showed synthetic color bars — Android source was a stub with silent FakeFrameSource fallback. Wire real camera; no `/core` / vision-test / existing-test changes.

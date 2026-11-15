@@ -16,6 +16,12 @@ if ! command -v buildozer >/dev/null 2>&1; then
   exit 1
 fi
 
+# p4a re-creates build/venv with `python -m venv` on top of an existing one,
+# which corrupts pip (ImportError: cannot import name 'capture_logging').
+# Keep other_builds / python-installs; only wipe the host build venv.
+echo "==> Clearing p4a build/venv (keeps rest of .buildozer)"
+rm -rf .buildozer/android/platform/build-*/build/venv
+
 buildozer android debug
 
 APK="$(ls -1t bin/colorsight-*-debug.apk 2>/dev/null | head -n1 || true)"
