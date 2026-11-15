@@ -17,6 +17,9 @@ class WelcomeScreen(Screen):
         super().__init__(name="welcome", **kwargs)
         self._build()
 
+    def apply_theme(self):
+        self._build()
+
     def _finish(self, target: str = "test"):
         mark_onboarding_done()
         if self.manager:

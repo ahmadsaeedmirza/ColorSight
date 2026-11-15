@@ -7,6 +7,7 @@ from kivy.animation import Animation
 from kivy.graphics import Color, Ellipse, Line, RoundedRectangle
 from kivy.graphics.texture import Texture
 from kivy.metrics import dp
+from kivy.properties import ObjectProperty
 from kivy.uix.anchorlayout import AnchorLayout
 from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.boxlayout import BoxLayout
@@ -15,9 +16,8 @@ from kivy.uix.label import Label
 from kivy.uix.widget import Widget
 
 from colorsight.theme.geometry import clamped_radii
-from colorsight.theme.tokens import Colors, Fonts
-from colorsight.widgets import Icon, PrimaryButton
-from colorsight.theme.tokens import Icons
+from colorsight.theme.tokens import Colors, Fonts, Icons, Radii
+from colorsight.widgets import Icon
 
 
 def numpy_to_texture(rgb: np.ndarray, existing: Texture | None = None) -> Texture:
@@ -124,10 +124,11 @@ class Numpad(BoxLayout):
 
 ARROW_KEY_DP = 72
 ARROW_GAP_DP = 8
+_ARROW_PRESS_MIN_S = 0.12
 
 
 class ArrowKey(ButtonBehavior, FloatLayout):
-    """White rounded key with centered Material Icon + soft shadow + press feedback."""
+    """Rounded key: pressed = accent blue + white icon + 0.96 scale (≥120 ms)."""
 
     def __init__(self, orient: str, icon_name: str, on_orient=None, **kwargs):
         super().__init__(**kwargs)
@@ -137,6 +138,9 @@ class ArrowKey(ButtonBehavior, FloatLayout):
         self._orient = orient
         self._on_orient = on_orient
         self._pressed = False
+        self._press_t0 = 0.0
+        self._release_ev = None
+        self._base_size = (side, side)
 
         self._icon = Icon(icon=icon_name, icon_size=28, color=Colors.text)
         self._icon.size_hint = (None, None)
@@ -156,24 +160,118 @@ class ArrowKey(ButtonBehavior, FloatLayout):
                 size=self.size,
                 radius=radii,
             )
-            fill = (0.96, 0.96, 0.96, 1) if self._pressed else Colors.surface
-            Color(*fill)
+            if self._pressed:
+                Color(*Colors.accent_blue)
+            else:
+                Color(*Colors.surface)
             RoundedRectangle(pos=self.pos, size=self.size, radius=radii)
+        self._icon.color = (1, 1, 1, 1) if self._pressed else Colors.text
         self._icon.center = self.center
 
     def on_press(self):
+        import time
+
+        self._press_t0 = time.perf_counter()
+        if self._release_ev is not None:
+            self._release_ev.cancel()
+            self._release_ev = None
         self._pressed = True
+        cx, cy = self.center
+        side = self._base_size[0] * 0.96
+        self.size = (side, side)
+        self.center = (cx, cy)
         self._layout()
-        Animation.cancel_all(self)
-        Animation(opacity=0.88, d=0.06).start(self)
+
+    def on_release(self):
+        import time
+        from kivy.clock import Clock
+
+        elapsed = time.perf_counter() - self._press_t0
+        remain = max(0.0, _ARROW_PRESS_MIN_S - elapsed)
+
+        def _finish(*_a):
+            self._release_ev = None
+            self._pressed = False
+            cx, cy = self.center
+            self.size = self._base_size
+            self.center = (cx, cy)
+            self._layout()
+            if callable(self._on_orient):
+                self._on_orient(self._orient)
+
+        if remain > 0:
+            self._release_ev = Clock.schedule_once(_finish, remain)
+        else:
+            _finish()
+
+    def apply_theme(self):
+        self._layout()
+
+
+class CantSeeButton(ButtonBehavior, BoxLayout):
+    """Soft peach full-width control with visibility_off icon — not a gray disabled look."""
+
+    on_press_cb = ObjectProperty(None, allownone=True)
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.orientation = "horizontal"
+        self.size_hint_y = None
+        self.height = dp(52)
+        self.padding = [dp(16), dp(10)]
+        self.spacing = dp(10)
+        self._pressed = False
+        self._icon = Icon(
+            icon=Icons.visibility_off,
+            icon_size=22,
+            color=Colors.cant_see_text,
+            size_hint=(None, None),
+            size=(dp(28), dp(28)),
+        )
+        self._label = Label(
+            text="I can't see it",
+            font_name=Fonts.semibold,
+            font_size=dp(15),
+            color=Colors.cant_see_text,
+            halign="left",
+            valign="middle",
+            size_hint=(1, 1),
+        )
+        self._label.bind(
+            size=lambda *_: setattr(self._label, "text_size", self._label.size)
+        )
+        self.add_widget(self._icon)
+        self.add_widget(self._label)
+        self.bind(pos=self._draw, size=self._draw)
+        self._draw()
+
+    def _draw(self, *_a):
+        self.canvas.before.clear()
+        radii = clamped_radii(dp(Radii.button), self.width, self.height)
+        fill = Colors.cant_see_bg_pressed if self._pressed else Colors.cant_see_bg
+        with self.canvas.before:
+            Color(*Colors.shadow)
+            RoundedRectangle(
+                pos=(self.x, self.y - dp(2)), size=self.size, radius=radii
+            )
+            Color(*fill)
+            RoundedRectangle(pos=self.pos, size=self.size, radius=radii)
+        self._icon.color = Colors.cant_see_text
+        self._label.color = Colors.cant_see_text
+        self._icon.center_y = self.center_y
+
+    def on_press(self):
+        self._pressed = True
+        self._draw()
 
     def on_release(self):
         self._pressed = False
-        self._layout()
-        Animation.cancel_all(self)
-        Animation(opacity=1.0, d=0.10).start(self)
-        if callable(self._on_orient):
-            self._on_orient(self._orient)
+        self._draw()
+        if callable(self.on_press_cb):
+            self.on_press_cb(self)
+
+    def apply_theme(self):
+        self._draw()
 
 
 class ArrowPad(BoxLayout):
@@ -186,12 +284,11 @@ class ArrowPad(BoxLayout):
         self.size_hint_y = None
         key = dp(ARROW_KEY_DP)
         gap = dp(ARROW_GAP_DP)
-        # 2 key rows + can't-see (fits 360×640 with stimulus)
-        self.height = key * 2 + gap + dp(48) + dp(10)
+        # 2 key rows + gap + can't-see
+        self.height = key * 2 + gap + dp(52) + dp(12)
         self._on_orient = on_orient
         self._on_cant_see = on_cant_see
 
-        # Top: Up centered
         top = AnchorLayout(
             anchor_x="center",
             anchor_y="center",
@@ -201,7 +298,6 @@ class ArrowPad(BoxLayout):
         top.add_widget(ArrowKey("up", Icons.arrow_upward, on_orient=self._tap))
         self.add_widget(top)
 
-        # Bottom: Left | Down | Right (Down under Up)
         bottom = BoxLayout(
             orientation="horizontal",
             size_hint=(None, None),
@@ -221,10 +317,8 @@ class ArrowPad(BoxLayout):
         holder.add_widget(bottom)
         self.add_widget(holder)
 
-        cant = PrimaryButton(text="I can't see it")
-        cant.bg_color = (0.85, 0.85, 0.85, 1)
-        cant.text_color = Colors.text
-        cant.height = dp(48)
+        self.add_widget(Widget(size_hint_y=None, height=dp(4)))
+        cant = CantSeeButton()
         cant.on_press_cb = lambda *_: self._tap_cant()
         self.add_widget(cant)
 

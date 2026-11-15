@@ -37,13 +37,14 @@ class _NavItem(ButtonBehavior, BoxLayout):
             text=label,
             font_name=Fonts.semibold if active else Fonts.medium,
             font_size=dp(9),
-            color=Colors.nav_icon_active if active else (0.65, 0.65, 0.65, 1),
+            color=Colors.nav_icon_active if active else Colors.nav_icon,
             size_hint=(1, None),
             height=dp(14),
             halign="center",
             valign="middle",
             shorten=True,
             shorten_from="right",
+            max_lines=1,
         )
         self._caption.bind(size=lambda *_: setattr(self._caption, "text_size", self._caption.size))
         self.add_widget(self._glyph)
@@ -51,8 +52,9 @@ class _NavItem(ButtonBehavior, BoxLayout):
 
     def set_active(self, active: bool):
         self._glyph.color = Colors.nav_icon_active if active else Colors.nav_icon
-        self._caption.color = Colors.nav_icon_active if active else (0.65, 0.65, 0.65, 1)
+        self._caption.color = Colors.nav_icon_active if active else Colors.nav_icon
         self._caption.font_name = Fonts.semibold if active else Fonts.medium
+        self._caption.text_size = self._caption.size
 
     def on_release(self):
         if callable(self._on_tap):
@@ -198,3 +200,8 @@ class FloatingNavBar(FloatLayout):
         for key, widget in self._item_widgets.items():
             if isinstance(widget, _NavItem):
                 widget.set_active(key == self.active)
+
+    def apply_theme(self):
+        self._layout()
+        self._sync_active()
+

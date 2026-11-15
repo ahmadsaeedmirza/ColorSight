@@ -74,6 +74,13 @@ class PrimaryButton(ButtonBehavior, BoxLayout):
             )
             Color(*self.bg_color)
             RoundedRectangle(pos=self.pos, size=self.size, radius=radii)
+        # Keep label vertically centered in the button
+        self._label.halign = "center"
+        self._label.valign = "middle"
+        self._label.color = self.text_color
+
+    def apply_theme(self):
+        self._fit_and_redraw()
 
     def on_press(self):
         Animation.cancel_all(self)

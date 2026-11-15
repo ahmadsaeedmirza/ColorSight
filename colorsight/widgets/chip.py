@@ -5,6 +5,7 @@ from kivy.metrics import dp
 from kivy.properties import BooleanProperty, ListProperty, ObjectProperty, StringProperty
 from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.label import Label
 from kivy.uix.scrollview import ScrollView
 from kivy.graphics import Color, Line, RoundedRectangle
@@ -12,12 +13,12 @@ from kivy.graphics import Color, Line, RoundedRectangle
 from colorsight.theme.geometry import clamped_radii
 from colorsight.theme.tokens import Colors, Fonts, Radii, Spacing
 
-# Horizontal padding inside each chip (each side)
-_CHIP_PAD_X = 18
+_CHIP_PAD_X = 18  # → width = label + 36 dp
+_CHIP_H = 40
 
 
-class Chip(ButtonBehavior, BoxLayout):
-    """Single-line pill that grows to fit its label (no wrap / clip)."""
+class Chip(ButtonBehavior, FloatLayout):
+    """Fixed-height single-line pill; label centered both ways."""
 
     text = StringProperty("")
     selected = BooleanProperty(False)
@@ -28,11 +29,8 @@ class Chip(ButtonBehavior, BoxLayout):
         self.text = text
         self.selected = selected
         self.size_hint = (None, None)
-        self.height = dp(36)
-        self.padding = [dp(_CHIP_PAD_X), 0, dp(_CHIP_PAD_X), 0]
-        self.spacing = 0
+        self.height = dp(_CHIP_H)
 
-        # Do NOT bind text_size to widget size — that forces wrapping.
         self._label = Label(
             text=text,
             font_name=Fonts.medium,
@@ -42,48 +40,36 @@ class Chip(ButtonBehavior, BoxLayout):
             valign="middle",
             size_hint=(None, None),
             shorten=False,
+            max_lines=1,
         )
         self.add_widget(self._label)
 
         self.bind(
-            pos=self._redraw,
-            size=self._redraw,
+            pos=self._layout,
+            size=self._layout,
             selected=self._on_selected,
             text=self._on_text,
         )
         self._on_selected()
-        Clock.schedule_once(lambda dt: self._fit_width(), 0)
-        self._redraw()
+        Clock.schedule_once(lambda dt: self._fit(), 0)
 
     def _on_text(self, *_args):
         self._label.text = self.text
-        self._fit_width()
+        self._fit()
 
-    def _fit_width(self, *_args):
+    def _fit(self, *_args):
         self._label.text_size = (None, None)
         self._label.texture_update()
-        tw, th = self._label.texture_size
-        if tw <= 0:
-            tw = max(dp(24), len(self.text) * dp(7))
-        if th <= 0:
-            th = dp(18)
-        self._label.size = (tw, th)
+        tw = self._label.texture_size[0] or max(dp(24), len(self.text) * dp(7))
         self.width = max(dp(52), tw + dp(_CHIP_PAD_X) * 2)
-        # Vertically center the label inside the chip
-        self._label.center_y = self.center_y
-        self._label.x = self.x + dp(_CHIP_PAD_X)
-        self._redraw()
+        self.height = dp(_CHIP_H)
+        self._layout()
 
     def _on_selected(self, *_args):
-        if self.selected:
-            self._label.color = list(Colors.chip_selected_text)
-            self._label.font_name = Fonts.semibold
-        else:
-            self._label.color = list(Colors.chip_text)
-            self._label.font_name = Fonts.medium
-        self._fit_width()
+        self._label.font_name = Fonts.semibold if self.selected else Fonts.medium
+        self._fit()
 
-    def _redraw(self, *_args):
+    def _layout(self, *_args):
         self.canvas.before.clear()
         radii = clamped_radii(dp(Radii.chip), self.width, self.height)
         with self.canvas.before:
@@ -104,16 +90,20 @@ class Chip(ButtonBehavior, BoxLayout):
                     ),
                     width=1,
                 )
-        # Keep label centered after layout moves
-        if self._label.texture_size[0] > 0:
-            self._label.size = self._label.texture_size
-        self._label.center_y = self.center_y
-        self._label.x = self.x + dp(_CHIP_PAD_X)
+        # Center via text_size = chip size (halign/valign middle)
+        self._label.size = self.size
+        self._label.pos = self.pos
+        self._label.text_size = self.size
+        self._label.halign = "center"
+        self._label.valign = "middle"
         self._label.color = (
             list(Colors.chip_selected_text)
             if self.selected
             else list(Colors.chip_text)
         )
+
+    def apply_theme(self):
+        self._layout()
 
     def on_release(self):
         if callable(self.select_cb):
@@ -121,7 +111,7 @@ class Chip(ButtonBehavior, BoxLayout):
 
 
 class ChipRow(BoxLayout):
-    """Horizontal chip strip inside a scrollbar-free ScrollView for narrow screens."""
+    """Horizontal chip strip in a scrollbar-free ScrollView (scrolls to the edge)."""
 
     options = ListProperty([])
     selected = StringProperty("")
@@ -131,7 +121,7 @@ class ChipRow(BoxLayout):
         super().__init__(**kwargs)
         self.orientation = "horizontal"
         self.size_hint_y = None
-        self.height = dp(40)
+        self.height = dp(_CHIP_H)
         self.padding = 0
         self.spacing = 0
         self.options = options or []
@@ -143,12 +133,13 @@ class ChipRow(BoxLayout):
             bar_width=0,
             size_hint=(1, 1),
             scroll_type=["content"],
+            effect_cls="ScrollEffect",
         )
         self._row = BoxLayout(
             orientation="horizontal",
             size_hint=(None, 1),
             spacing=dp(Spacing.sm),
-            padding=[0, 0, 0, 0],
+            padding=[0, 0, dp(Spacing.screen_x), 0],  # room past the right margin
         )
         self._row.bind(minimum_width=self._row.setter("width"))
         self._scroll.add_widget(self._row)
@@ -163,7 +154,6 @@ class ChipRow(BoxLayout):
             chip = Chip(text=opt, selected=(opt == self.selected))
             chip.select_cb = self._pick
             self._row.add_widget(chip)
-        Clock.schedule_once(lambda dt: self._row.width, 0)
 
     def _pick(self, chip: Chip):
         self.selected = chip.text
@@ -172,3 +162,8 @@ class ChipRow(BoxLayout):
                 child.selected = child.text == self.selected
         if callable(self.change_cb):
             self.change_cb(self.selected)
+
+    def apply_theme(self):
+        for child in self._row.children:
+            if isinstance(child, Chip):
+                child.apply_theme()

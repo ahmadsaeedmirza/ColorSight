@@ -4,6 +4,14 @@ Newest entries first. Append after every prompt per `rules.md`.
 
 ---
 
+## 2026-11-15 — Phone UI batch: theme, chips, camera, diagnostics
+
+**Prompt:** Real-phone UI batch (1080×2400): black transition flash; Home chip centering/scroll; Vision Test pressed states; Camera layout/loupe clip; System/Light/Dark theme with neutral accuracy surfaces; on-device log viewer; GHA action majors. No `/core` / vision-test logic / scoring / existing-test changes. **Do not commit** (user pushes).
+
+**Fixes:** Opaque screen + root BGs; `Chip` 40 dp + centered `text_size`; chip row bleeds to right edge; ArrowKey blue press ≥120 ms; peach `CantSeeButton` + `visibility_off`; Camera margins/z-order/loupe stencil + centered start; `ThemeController` + dark tokens; Test/Photos/Camera stay `NEUTRAL_BG`; rotating log + Settings “View recent log”; Actions checkout/cache/java/python/upload → v5/v6; `tests/test_chip_centering.py`.
+
+---
+
 ## 2026-11-15 — Android full-screen layout + API 35
 
 **Prompt:** APK UI stuck in ~390 px bottom-left box on 1080×2400; Welcome clipping/overlap; Play Protect older-Android note; phone-density desktop sim. No `/core` / vision-test / test changes.

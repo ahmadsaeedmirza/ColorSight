@@ -41,3 +41,15 @@ def mark_onboarding_done() -> None:
     data = load_prefs()
     data["onboarding_done"] = True
     save_prefs(data)
+
+
+def get_theme_pref() -> str:
+    pref = str(load_prefs().get("theme", "system")).lower()
+    return pref if pref in ("system", "light", "dark") else "system"
+
+
+def set_theme_pref(pref: str) -> None:
+    pref = pref if pref in ("system", "light", "dark") else "system"
+    data = load_prefs()
+    data["theme"] = pref
+    save_prefs(data)

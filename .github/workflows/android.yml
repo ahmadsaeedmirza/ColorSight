@@ -18,7 +18,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Free disk space
         run: |
@@ -36,13 +36,13 @@ jobs:
           df -h
 
       - name: Set up Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
@@ -62,7 +62,7 @@ jobs:
           python -m pip install "buildozer" "cython==0.29.36"
 
       - name: Cache Buildozer / p4a
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.buildozer
@@ -91,7 +91,7 @@ jobs:
 
       - name: Upload APK
         if: success()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: colorsight-apk
           path: bin/*.apk
@@ -115,7 +115,7 @@ jobs:
 
       - name: Upload failure log tail
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: colorsight-build-failure-log
           path: ci-failure/buildozer-tail.txt
@@ -124,7 +124,7 @@ jobs:
 
       - name: Upload full build log
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: colorsight-build-full-log
           path: buildozer-ci.log

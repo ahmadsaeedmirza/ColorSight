@@ -196,7 +196,13 @@ class TextLinkButton(ButtonBehavior, Label):
         self.valign = "middle"
         self.size_hint_y = None
         self.height = dp(28)
+        self.shorten = True
+        self.max_lines = 1
         self.bind(size=lambda *_: setattr(self, "text_size", self.size))
+
+    def apply_theme(self):
+        self.color = Colors.accent_blue
+        self.text_size = self.size
 
 
 class _ModeChip(ButtonBehavior, Label):
@@ -207,7 +213,7 @@ class _ModeChip(ButtonBehavior, Label):
         self.text = text
         self.font_name = Fonts.semibold if active else Fonts.medium
         self.font_size = dp(12)
-        self.color = (1, 1, 1, 1) if active else (0.72, 0.72, 0.72, 1)
+        self.color = Colors.toolbar_text_active if active else Colors.toolbar_text
         self.halign = "center"
         self.valign = "middle"
         self.size_hint = (1, 1)
@@ -221,7 +227,7 @@ class _ModeChip(ButtonBehavior, Label):
     def set_active(self, active: bool):
         self._active = active
         self.font_name = Fonts.semibold if active else Fonts.medium
-        self.color = (1, 1, 1, 1) if active else (0.72, 0.72, 0.72, 1)
+        self.color = Colors.toolbar_text_active if active else Colors.toolbar_text
 
     def on_release(self):
         _invoke(self._on_tap, self.key)

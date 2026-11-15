@@ -5,7 +5,7 @@ from .photos import PhotosScreen
 from .camera import CameraScreen
 from .lens import LensScreen
 from .profile import ProfileScreen
-from .settings import SettingsScreen
+from .settings import LogViewerScreen, SettingsScreen
 
 __all__ = [
     "WelcomeScreen",
@@ -16,4 +16,5 @@ __all__ = [
     "LensScreen",
     "ProfileScreen",
     "SettingsScreen",
+    "LogViewerScreen",
 ]

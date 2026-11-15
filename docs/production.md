@@ -159,6 +159,8 @@ Sim: **540×1200** window at **`KIVY_METRICS_DENSITY=1.375`** (half-scale of 108
 | Corrupt Buildozer / p4a venv | Delete the bad env under `.buildozer/` (or clear the Actions cache for `buildozer-*`) and rebuild clean |
 | Old kivy/numpy/pillow pins on Python 3.14 | Keep those **unpinned**; single `version = 0.1.0` (no `version.regex`) |
 | **UI stuck in a ~390 px box (bottom-left) on phone** | Desktop `Window.size` / Config **390×844** was also applied on Android. Guard with `platform not in ('android','ios')` in `main.py`; never set window size in `app.py` on device. Use `tools/run_phone_sim.py` to catch this |
+| **Black flash between screens** | Every `Screen` + root must paint an opaque themed (or neutral) bg in `canvas.before`; keep `Window.clearcolor` in sync with the theme |
+| **On-device debugging** | Settings → Debug → **View recent log** (last 300 lines, copy). Log file rotates under `user_data_dir` (paths never shown in UI) |
 | Play Protect / “older Android” on install | Normal for **debug** APKs; install anyway. Target SDK is `android.api = 35` (min 24) |
 | `INSTALL_FAILED_UPDATE_INCOMPATIBLE` | New debug key each CI run — **uninstall** `org.colorsight.colorsight` before installing |
 

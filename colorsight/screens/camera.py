@@ -39,6 +39,7 @@ from colorsight.photo_io import is_android, save_corrected_image
 from colorsight.screens.camera_widgets import CameraModeToolbar, LivePreviewStage, LoupeOverlay
 from colorsight.screens.photo_widgets import PreviewSeverityBar, TextLinkButton
 from colorsight.storage import profile_path
+from colorsight.theme.screen_bg import install_opaque_bg
 from colorsight.theme.tokens import Colors, Fonts, Spacing
 from colorsight.widgets import PastelCard, PrimaryButton, ScreenHeader
 
@@ -48,6 +49,7 @@ log = logging.getLogger(__name__)
 class CameraScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(name="camera", **kwargs)
+        install_opaque_bg(self, neutral=True)  # preview accuracy surface
         self._profile = None
         self._mode = "corrected"
         self._preview_severity = 0.5
@@ -128,6 +130,7 @@ class CameraScreen(Screen):
 
     def _build_chrome(self):
         self._root.clear_widgets()
+        # Neutral preview fills the screen; chrome sits on top
         self._stage = LivePreviewStage(size_hint=(1, 1))
         self._root.add_widget(self._stage)
 
@@ -140,9 +143,16 @@ class CameraScreen(Screen):
                 dp(Spacing.screen_x),
                 dp(Spacing.nav_clearance),
             ],
-            spacing=dp(Spacing.xs),
+            spacing=dp(Spacing.sm),
         )
         self._root.add_widget(self._overlay)
+
+        # Loupe above controls (z-order) so the name pill is never under Strength
+        self._loupe = LoupeOverlay()
+        self._loupe.opacity = 0
+        self._loupe.disabled = True
+        self._loupe.move_cb = self._on_loupe_move
+        self._root.add_widget(self._loupe)
 
     def _rebuild(self):
         self._overlay.clear_widgets()
@@ -162,47 +172,41 @@ class CameraScreen(Screen):
         )
         self._overlay.add_widget(header)
 
-        self._body = FloatLayout(size_hint=(1, 1))
-        self._overlay.add_widget(self._body)
-
-        # Status / permission cards sit in body
+        # Cards below header with full width inside side margins
         self._card_host = BoxLayout(
             orientation="vertical",
             size_hint=(1, None),
             height=dp(1),
-            pos_hint={"top": 1},
             spacing=dp(8),
         )
-        self._body.add_widget(self._card_host)
+        self._overlay.add_widget(self._card_host)
         self._refresh_cards()
 
-        # Loupe
-        self._loupe = LoupeOverlay()
-        self._loupe.opacity = 1 if self._loupe_on else 0
-        self._loupe.disabled = not self._loupe_on
-        self._loupe.move_cb = self._on_loupe_move
-        self._loupe.pos = (dp(40), dp(200))
-        self._body.add_widget(self._loupe)
+        # Preview spacer — stage already full-bleed behind; this keeps controls at bottom
+        self._body = Widget(size_hint=(1, 1))
+        self._overlay.add_widget(self._body)
 
-        # Controls
         controls = BoxLayout(
             orientation="vertical",
             size_hint=(1, None),
-            height=dp(140),
-            spacing=dp(4),
-            pos_hint={"x": 0, "y": 0},
+            height=dp(148),
+            spacing=dp(6),
         )
         row = BoxLayout(orientation="horizontal", size_hint_y=None, height=dp(22))
-        row.add_widget(
-            Label(
-                text="Strength",
-                font_name=Fonts.semibold,
-                font_size=dp(12),
-                color=Colors.text,
-                size_hint=(None, 1),
-                width=dp(70),
-            )
+        self._strength_lbl = Label(
+            text="Strength",
+            font_name=Fonts.semibold,
+            font_size=dp(12),
+            color=Colors.text,
+            size_hint=(None, 1),
+            width=dp(70),
+            halign="left",
+            valign="middle",
         )
+        self._strength_lbl.bind(
+            size=lambda *_: setattr(self._strength_lbl, "text_size", self._strength_lbl.size)
+        )
+        row.add_widget(self._strength_lbl)
         self._sev_value = Label(
             text=f"{strength_percent(self._preview_severity)}",
             font_name=Fonts.semibold,
@@ -210,6 +214,11 @@ class CameraScreen(Screen):
             color=Colors.text,
             size_hint=(None, 1),
             width=dp(36),
+            halign="right",
+            valign="middle",
+        )
+        self._sev_value.bind(
+            size=lambda *_: setattr(self._sev_value, "text_size", self._sev_value.size)
         )
         row.add_widget(Widget())
         row.add_widget(self._sev_value)
@@ -242,11 +251,16 @@ class CameraScreen(Screen):
             height=dp(18),
         )
         controls.add_widget(self._status)
+        self._controls = controls
         self._overlay.add_widget(controls)
+
+        self._loupe.opacity = 1 if self._loupe_on else 0
+        self._loupe.disabled = not self._loupe_on
+        Clock.schedule_once(lambda dt: self._center_loupe(), 0)
 
     def _refresh_cards(self):
         self._card_host.clear_widgets()
-        self._card_host.height = dp(8)
+        self._card_host.height = dp(0)
         if self._perm_denied:
             card = PastelCard(
                 title="Camera access needed",
@@ -259,7 +273,7 @@ class CameraScreen(Screen):
             btn = PrimaryButton(text="Open settings")
             btn.on_press_cb = lambda *_: open_settings_camera()
             self._card_host.add_widget(btn)
-            self._card_host.height = dp(180)
+            self._card_host.height = dp(200)
             return
         if self._profile is None:
             card = PastelCard(
@@ -273,7 +287,18 @@ class CameraScreen(Screen):
             btn = PrimaryButton(text="Go to Vision Test")
             btn.on_press_cb = lambda *_: self._go("test")
             self._card_host.add_widget(btn)
-            self._card_host.height = dp(180)
+            self._card_host.height = dp(200)
+
+    def _center_loupe(self, *_a):
+        """Place loupe at preview center, above the control stack."""
+        d = self._loupe.width or dp(140)
+        # Preview band: between card_host bottom and controls top
+        top = self._card_host.y if self._card_host.height > 0 else self._overlay.top - dp(56)
+        bot = self._controls.top if hasattr(self, "_controls") else self._overlay.y + dp(160)
+        cy = (top + bot) / 2.0
+        cx = self._root.center_x
+        self._loupe.pos = (cx - d / 2, cy - d / 2)
+        self._loupe.place_pill_inside(self._stage, prefer_below=True)
 
     def _go(self, name: str):
         if self.manager:
@@ -373,9 +398,11 @@ class CameraScreen(Screen):
         self._loupe.opacity = 1 if self._loupe_on else 0
         self._loupe.disabled = not self._loupe_on
         if self._loupe_on:
+            self._center_loupe()
             self._update_loupe()
 
     def _on_loupe_move(self, *_a):
+        self._loupe.place_pill_inside(self._stage, prefer_below=True)
         self._update_loupe()
 
     def _update_loupe(self):

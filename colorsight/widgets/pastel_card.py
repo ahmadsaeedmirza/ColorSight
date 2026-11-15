@@ -134,6 +134,12 @@ class PastelCard(ButtonBehavior, RoundedCard):
         self.card_color = fill
         self._accent = accent
 
+    def apply_theme(self):
+        self._sync_palette()
+        self._title_lbl.color = Colors.text
+        self._sub_lbl.color = Colors.text_muted
+        self._reflow_subtitle()
+
     def on_release(self):
         if callable(self.select_cb):
             self.select_cb(self)

@@ -83,6 +83,9 @@ class HomeScreen(Screen):
         self._filter = "All"
         self._build()
 
+    def apply_theme(self):
+        self._build()
+
     def _open(self, screen_name):
         def _handler(_card=None):
             if self.manager:
@@ -112,18 +115,30 @@ class HomeScreen(Screen):
     def _build(self):
         self.clear_widgets()
         scroll = ScrollView(do_scroll_x=False, bar_width=0)
+        # Left pad only — chip row scrolls flush to the right screen edge
         self._content = BoxLayout(
             orientation="vertical",
             padding=[
                 dp(Spacing.screen_x),
                 dp(Spacing.lg),
-                dp(Spacing.screen_x),
+                0,
                 dp(Spacing.nav_clearance),
             ],
             spacing=dp(Spacing.md),
             size_hint_y=None,
         )
         self._content.bind(minimum_height=self._content.setter("height"))
+
+        def _right_pad(child):
+            wrap = BoxLayout(
+                orientation="horizontal",
+                size_hint_y=None,
+                height=child.height,
+                padding=[0, 0, dp(Spacing.screen_x), 0],
+            )
+            wrap.add_widget(child)
+            child.bind(height=lambda *_: setattr(wrap, "height", child.height))
+            return wrap
 
         header = BoxLayout(
             orientation="horizontal",
@@ -133,7 +148,7 @@ class HomeScreen(Screen):
         header.add_widget(_MenuButton(on_tap=self._open("settings")))
         header.add_widget(Widget())
         header.add_widget(_AvatarButton(on_tap=self._open("profile")))
-        self._content.add_widget(header)
+        self._content.add_widget(_right_pad(header))
 
         greet = Label(
             text="Your toolkit",
@@ -146,7 +161,7 @@ class HomeScreen(Screen):
             height=dp(36),
         )
         greet.bind(size=lambda *_: setattr(greet, "text_size", greet.size))
-        self._content.add_widget(greet)
+        self._content.add_widget(_right_pad(greet))
 
         chips = ChipRow(
             options=["All", "Test", "Photos", "Camera", "Lens", "Profile"],
@@ -156,7 +171,7 @@ class HomeScreen(Screen):
         self._content.add_widget(chips)
 
         self._grid_host = BoxLayout(orientation="vertical", size_hint_y=None, height=dp(1))
-        self._content.add_widget(self._grid_host)
+        self._content.add_widget(_right_pad(self._grid_host))
         self._rebuild_grid()
 
         scroll.add_widget(self._content)

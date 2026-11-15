@@ -62,7 +62,13 @@ Helper: `colorsight.widgets.Icon` — consistent glyph size, color, and font reg
 
 ## Color tokens
 
-### Surfaces & text
+Light + dark palettes live in `tokens.py` (`LIGHT_COLORS` / `DARK_COLORS`). `Colors.*` is a mutable bag updated by `ThemeController` (Settings: System / Light / Dark). Widgets redraw via `apply_theme()` / tree walk — avoid hard-coded RGB in screens.
+
+### Accuracy rule (mandatory)
+
+**Vision Test trial UI** and **Photos / Camera preview hosts** always use **`NEUTRAL_BG` / `NEUTRAL_SURFACE`** (light cream / white), regardless of the chrome theme. Dark mode must never tint stimuli, corrected previews, or loupe samples.
+
+### Surfaces & text (light)
 
 | Token | Hex | Use |
 |-------|-----|-----|
@@ -73,11 +79,24 @@ Helper: `colorsight.widgets.Icon` — consistent glyph size, color, and font reg
 | `nav_bg` | `#1E1E1E` | Floating bottom pill |
 | `nav_icon` | muted light gray | Inactive nav icons |
 | `nav_icon_active` | `#FFFFFF` | Active nav emphasis |
-| `accent_blue` | `#4C8DFF` | Center FAB / primary actions |
+| `accent_blue` | `#4C8DFF` | Center FAB / primary actions / arrow press |
 | `accent_dark` | `#1E1E1E` | Dark round CTA (Welcome arrow) |
 | `chip_selected_bg` | `#1E1E1E` | Selected chip fill |
 | `chip_selected_text` | `#FFFFFF` | Selected chip label (must stay visible) |
 | `chip_bg` / `chip_text` | white / `#1C1C1C` | Unselected chips |
+| `cant_see_bg` | `#FFD2B8` | “I can't see it” (pressed `#FF8A54`) |
+
+### Surfaces (dark chrome)
+
+| Token | Hex | Use |
+|-------|-----|-----|
+| `bg` | `#121214` | App background |
+| `surface` | `#1E1E22` | Cards / elevated |
+| `text` | `#F2F2F2` | Primary text |
+| `text_muted` | `#A0A0A8` | Subtitles |
+| `nav_bg` | `#2A2A2F` | Floating nav |
+
+Opaque `Screen` + root `canvas.before` rectangles + `Window.clearcolor` prevent **black flashes** during ~220 ms fades.
 
 ### Pastel cards (+ stronger accent dots)
 
@@ -141,13 +160,13 @@ Apply the **same** clamped value to fill **and** matching shadow layers. Used by
 | `Icon` | Material Icons ligature label — size via **`icon_size`**, not Kivy `size=` float |
 | `RoundedCard` | Base card with clamped radius + soft shadow |
 | `PastelCard` | Colored note card + accent dot, title, subtitle |
-| `Chip` / `ChipRow` | Single-line pills: width = label texture + ~18 dp pad each side (no `text_size` width wrap). `ChipRow` = horizontal ScrollView (`bar_width=0`). Selected = dark + **white** label; unselected = white + dark label, vertically centered. Callbacks: `select_cb` / `change_cb` |
+| `Chip` / `ChipRow` | Fixed **40 dp** height; label `text_size = chip size`, `halign/valign` center (no manual y offsets). Width = label + **36 dp**. `ChipRow` = horizontal ScrollView to the **right screen edge** (`bar_width=0`). Selected = dark + white label; unselected = white + dark. Callbacks: `select_cb` / `change_cb` |
 | `ScreenHeader` | Back (44 dp) + `header_gap` + title; optional `include_top_inset` / trailing |
 | `PillSearchBar` | Capsule search with Material `search` icon |
 | `FloatingNavBar` | Dark pill, equal slots, labels for all items, raised blue `add` FAB; `navigate_cb` |
 | `PrimaryButton` / `RoundIconButton` | Filled CTA / circular icon button |
 | `PillProgressBar` (test) | Thin capsule progress (**not** named `ProgressBar` — avoids Kivy builtin clash) |
-| `ArrowPad` / `ArrowKey` (test) | Keyboard inverted-T: Up alone, then Left·Down·Right (72 dp keys, 8 dp gaps, soft shadow, press feedback) + full-width “I can't see it” |
+| `ArrowPad` / `ArrowKey` / `CantSeeButton` (test) | Inverted-T keys: pressed = accent blue `#4C8DFF` + white icon + 0.96 scale for **≥120 ms**; released = white + dark icon. “I can't see it” = peach `#FFD2B8` + `visibility_off` icon (pressed `#FF8A54`) |
 | `AxisBars` (test) | Row per axis: pastel dot + Protan/Deutan/Tritan + ×cutoff value; bar with 1.0× tick |
 | `SeverityBar` (test) | Capsule + numeric “N / 100” label |
 | `Numpad` (test) | Legacy digit pad (plates flow retired from UI) |

@@ -3,7 +3,16 @@
 from __future__ import annotations
 
 import numpy as np
-from kivy.graphics import Color, Ellipse, Line, RoundedRectangle
+from kivy.graphics import (
+    Color,
+    Ellipse,
+    Line,
+    RoundedRectangle,
+    StencilPop,
+    StencilPush,
+    StencilUnUse,
+    StencilUse,
+)
 from kivy.metrics import dp
 from kivy.properties import BooleanProperty, NumericProperty, ObjectProperty, StringProperty
 from kivy.uix.behaviors import ButtonBehavior
@@ -16,7 +25,7 @@ from kivy.uix.image import Image as KivyImage
 from colorsight.camera_pipeline import DEFAULT_ZOOM, LOUPE_DIAMETER_DP
 from colorsight.screens.photo_widgets import _invoke, rgb_to_texture
 from colorsight.theme.geometry import clamped_radii
-from colorsight.theme.tokens import Colors, Fonts, Icons, Radii
+from colorsight.theme.tokens import Colors, Fonts, Icons, NEUTRAL_SURFACE, Radii
 from colorsight.widgets import Icon
 
 
@@ -27,6 +36,10 @@ class LivePreviewStage(FloatLayout):
         super().__init__(**kwargs)
         self._tex = None
         self._rgb = None
+        # Accuracy surface: always neutral light behind the frame
+        with self.canvas.before:
+            self._bg_c = Color(*NEUTRAL_SURFACE)
+            self._bg_r = RoundedRectangle(pos=self.pos, size=self.size, radius=[0])
         self._img = KivyImage(fit_mode="contain", size_hint=(1, 1))
         self.add_widget(self._img)
         self.bind(pos=self._layout, size=self._layout)
@@ -43,11 +56,12 @@ class LivePreviewStage(FloatLayout):
         return self._rgb
 
     def _layout(self, *_a):
+        self._bg_r.pos = self.pos
+        self._bg_r.size = self.size
         self._img.pos = self.pos
         self._img.size = self.size
 
     def image_to_pixel(self, x: float, y: float) -> tuple[float, float] | None:
-        """Map widget coords → source pixel coords for the contain-fitted texture."""
         if self._rgb is None or self._img.texture is None:
             return None
         th, tw = self._rgb.shape[0], self._rgb.shape[1]
@@ -60,14 +74,12 @@ class LivePreviewStage(FloatLayout):
         if x < ox or y < oy or x > ox + bw or y > oy + bh:
             return None
         px = (x - ox) / scale
-        # Kivy y-up; texture blit was flipped — image array row 0 is top after our flip in texture
-        # Widget y increases up; image row 0 is top of display after contain
         py = th - (y - oy) / scale
         return float(np.clip(px, 0, tw - 1)), float(np.clip(py, 0, th - 1))
 
 
 class LoupeOverlay(FloatLayout):
-    """Draggable circular loupe (~140 dp) with zoom, crosshair, lock, and name pill."""
+    """Draggable circular loupe; zoom content clipped to the circle; name pill above chrome."""
 
     locked = BooleanProperty(False)
     zoom = NumericProperty(DEFAULT_ZOOM)
@@ -78,7 +90,8 @@ class LoupeOverlay(FloatLayout):
         super().__init__(**kwargs)
         d = dp(LOUPE_DIAMETER_DP)
         self.size_hint = (None, None)
-        self.size = (d, d + dp(36))
+        # Glass only; pill is positioned separately but still a child for hit-testing
+        self.size = (d, d)
         self._dragging = False
         self._hold_ev = None
         self._glass = Widget(size_hint=(None, None), size=(d, d))
@@ -98,7 +111,7 @@ class LoupeOverlay(FloatLayout):
         self._pill = BoxLayout(
             orientation="horizontal",
             size_hint=(None, None),
-            size=(d + dp(40), dp(28)),
+            size=(d + dp(24), dp(28)),
             spacing=dp(6),
             padding=[dp(6), dp(2)],
         )
@@ -114,6 +127,7 @@ class LoupeOverlay(FloatLayout):
             halign="left",
             valign="middle",
             shorten=True,
+            max_lines=1,
         )
         self._name_lbl.bind(size=lambda *_: setattr(self._name_lbl, "text_size", self._name_lbl.size))
         self._pill.add_widget(self._swatch)
@@ -124,7 +138,6 @@ class LoupeOverlay(FloatLayout):
         self._zoom_tex = None
         self.bind(pos=self._layout, size=self._layout, locked=self._on_locked)
         self._layout()
-        self._draw_chrome()
 
     def _on_locked(self, *_a):
         self._lock_icon.icon = Icons.lock if self.locked else Icons.lock_open
@@ -154,32 +167,64 @@ class LoupeOverlay(FloatLayout):
 
     def _layout(self, *_a):
         d = dp(LOUPE_DIAMETER_DP)
-        self._glass.pos = (self.x, self.y + dp(32))
+        self.size = (d, d)
+        self._glass.pos = self.pos
         self._glass.size = (d, d)
         self._zoom_img.pos = self._glass.pos
         self._zoom_img.size = self._glass.size
-        self._lock_icon.pos = (self.x + d - dp(28), self.y + d + dp(8))
-        self._pill.pos = (self.x - dp(20), self.y)
+        self._lock_icon.pos = (self.x + d - dp(28), self.y + d - dp(28))
+        # Name pill directly below the loupe (caller may reposition above controls)
+        self._pill.size = (d + dp(24), dp(28))
+        self._pill.pos = (self.x - dp(12), self.y - dp(34))
+        self._swatch.pos = (self._pill.x + dp(6), self._pill.y + dp(6))
+        self._swatch2.pos = (self._swatch.x + dp(20), self._swatch.y)
+        self._draw_chrome()
+
+    def place_pill_inside(self, bounds: Widget, prefer_below: bool = True):
+        """Keep the name pill inside ``bounds`` (preview rect), below or above the glass."""
+        d = dp(LOUPE_DIAMETER_DP)
+        pill_h = self._pill.height
+        if prefer_below:
+            py = self.y - pill_h - dp(6)
+            if py < bounds.y:
+                py = self.y + d + dp(6)
+        else:
+            py = self.y + d + dp(6)
+            if py + pill_h > bounds.top:
+                py = self.y - pill_h - dp(6)
+        px = float(np.clip(self.x - dp(12), bounds.x, bounds.right - self._pill.width))
+        py = float(np.clip(py, bounds.y, bounds.top - pill_h))
+        self._pill.pos = (px, py)
         self._swatch.pos = (self._pill.x + dp(6), self._pill.y + dp(6))
         self._swatch2.pos = (self._swatch.x + dp(20), self._swatch.y)
         self._draw_chrome()
 
     def _draw_chrome(self):
-        self.canvas.after.clear()
+        # Circular stencil so zoom never sticks out of the loupe
+        self._glass.canvas.before.clear()
+        self._glass.canvas.after.clear()
         d = dp(LOUPE_DIAMETER_DP)
         gx, gy = self._glass.pos
-        with self.canvas.after:
+        with self._glass.canvas.before:
+            StencilPush()
+            Color(1, 1, 1, 1)
+            Ellipse(pos=(gx, gy), size=(d, d))
+            StencilUse()
+        with self._glass.canvas.after:
+            StencilUnUse()
+            StencilPop()
             Color(*Colors.shadow)
             Ellipse(pos=(gx, gy - dp(2)), size=(d, d))
             Color(1, 1, 1, 0.95)
             Line(circle=(gx + d / 2, gy + d / 2, d / 2 - dp(2)), width=1.6)
-            # Crosshair
             Color(1, 1, 1, 0.85)
             cx, cy = gx + d / 2, gy + d / 2
             Line(points=[cx - dp(12), cy, cx + dp(12), cy], width=1.1)
             Line(points=[cx, cy - dp(12), cx, cy + dp(12)], width=1.1)
-            # Name pill bg
-            Color(1, 1, 1, 0.92)
+
+        self.canvas.after.clear()
+        with self.canvas.after:
+            Color(1, 1, 1, 0.94)
             RoundedRectangle(
                 pos=self._pill.pos,
                 size=self._pill.size,
@@ -187,10 +232,11 @@ class LoupeOverlay(FloatLayout):
             )
 
     def on_touch_down(self, touch):
-        if not self.collide_point(*touch.pos):
+        if self._pill.collide_point(*touch.pos):
+            return True
+        if not self.collide_point(*touch.pos) and not self._glass.collide_point(*touch.pos):
             return False
         if self.locked:
-            # Tap lock icon area to unlock
             if self._lock_icon.collide_point(*touch.pos):
                 self.locked = False
                 _invoke(self.lock_cb, False)
@@ -219,9 +265,9 @@ class LoupeOverlay(FloatLayout):
             return True
         d = dp(LOUPE_DIAMETER_DP)
         nx = float(np.clip(touch.x - d / 2, parent.x, parent.x + parent.width - d))
-        ny = float(np.clip(touch.y - d / 2, parent.y, parent.y + parent.height - d - dp(36)))
+        ny = float(np.clip(touch.y - d / 2, parent.y, parent.y + parent.height - d))
         self.pos = (nx, ny)
-        _invoke(self.move_cb, self.center_x, self._glass.center_y)
+        _invoke(self.move_cb, self.center_x, self.center_y)
         return True
 
     def on_touch_up(self, touch):
@@ -246,12 +292,11 @@ class _CamChip(ButtonBehavior, Label):
         self.text = text
         self.font_name = Fonts.semibold if active else Fonts.medium
         self.font_size = dp(11)
-        self.color = (1, 1, 1, 1) if active else (0.72, 0.72, 0.72, 1)
+        self.color = Colors.toolbar_text_active if active else Colors.toolbar_text
         self.halign = "center"
         self.valign = "middle"
         self.size_hint = (1, 1)
         self._active = active
-        # Fixed toolbar slots: single line + ellipsis (cannot grow like Home Chip)
         self.shorten = True
         self.shorten_from = "right"
         self.max_lines = 1
@@ -260,10 +305,13 @@ class _CamChip(ButtonBehavior, Label):
     def set_active(self, active: bool):
         self._active = active
         self.font_name = Fonts.semibold if active else Fonts.medium
-        self.color = (1, 1, 1, 1) if active else (0.72, 0.72, 0.72, 1)
+        self.color = Colors.toolbar_text_active if active else Colors.toolbar_text
 
     def on_release(self):
         _invoke(self._on_tap, self.key)
+
+    def apply_theme(self):
+        self.set_active(self._active)
 
 
 class _CamIconHit(ButtonBehavior, BoxLayout):
@@ -317,7 +365,6 @@ class CameraModeToolbar(BoxLayout):
         self._draw()
 
     def set_frozen(self, frozen: bool):
-        # Swap pause/play glyph
         self._freeze_hit.clear_widgets()
         self._freeze_hit.add_widget(
             Icon(
@@ -328,36 +375,31 @@ class CameraModeToolbar(BoxLayout):
             )
         )
 
-    def on_mode(self, _i, _v):
+    def on_mode(self, _instance, _value):
         if self._chips:
             self._sync_mode()
         _invoke(self.mode_cb, self.mode)
 
     def _tap_mode(self, key: str):
-        if self.mode != key:
-            self.mode = key
-        else:
-            self._sync_mode()
+        self.mode = key
 
     def _do_freeze(self):
         _invoke(self.freeze_cb)
 
     def _sync_mode(self):
-        for k, chip in self._chips.items():
-            chip.set_active(k == self.mode)
+        for key, chip in self._chips.items():
+            chip.set_active(key == self.mode)
 
     def _draw(self, *_a):
         self.canvas.before.clear()
         with self.canvas.before:
-            Color(*Colors.shadow)
-            RoundedRectangle(
-                pos=(self.x, self.y - dp(2)),
-                size=self.size,
-                radius=clamped_radii(dp(Radii.chip), self.width, self.height),
-            )
-            Color(*Colors.nav_bg)
+            Color(*Colors.toolbar_bg)
             RoundedRectangle(
                 pos=self.pos,
                 size=self.size,
                 radius=clamped_radii(dp(Radii.chip), self.width, self.height),
             )
+
+    def apply_theme(self):
+        self._sync_mode()
+        self._draw()
