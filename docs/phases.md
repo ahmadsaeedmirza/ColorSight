@@ -17,8 +17,8 @@
 | Plate generator (legacy) — kept + tested, not in live UI | Done |
 | Trivector core + calibration tests | Done |
 | **Photos** — pick (Photo Picker / GET_CONTENT), Corrected@0% divider, Strength, MediaStore save, FileProvider share, comparison | Done |
-| **Camera** — live OpenCV / Camera4Kivy pipeline, freeze/capture | Done |
-| **Lens** — shared loupe + `name_color` | Done |
+| **Camera** — live OpenCV (desktop) / Camera4Kivy+CameraX (Android), freeze/capture, no silent fake | Done |
+| **Lens** — shared loupe + `name_color` on original frames | Done |
 | **Profile** — hero card, swatches, fine-tune (only overwrite), clear | Done |
 | **Settings** — About, Privacy, Display tips, FPS debug | Done |
 | First-run Welcome → test; later launches → Home; Android back | Done |

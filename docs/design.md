@@ -202,7 +202,7 @@ Apply the **same** clamped value to fill **and** matching shadow layers. Used by
 
 ### Camera / Lens recipe
 
-- Full-bleed `LivePreviewStage` (contain, no distortion); floating dark mode pill + Strength + freeze/capture (+ flip on Android).
+- Full-bleed `LivePreviewStage` (contain, no distortion); floating dark mode pill + Strength + freeze/capture (+ flip on Android). Real camera on Android (Camera4Kivy); never silent synthetic frames on device — desktop may show a **Test pattern** badge if the webcam is missing. Error cards: friendly permission / no-camera / start-failed copy + Retry / Open settings (no paths).
 - Loupe (~140 dp): zoom 2–4×, crosshair, lock on long-press, name pill via `core.name_color` (median 9×9 of **original** frame); corrected swatch when in Corrected mode.
 - Lens nav → Camera with loupe on. Respect `nav_clearance`.
 

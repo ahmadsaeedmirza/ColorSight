@@ -14,33 +14,35 @@ version = 0.1.0
 # pins for pure-Python pip modules. CI uses constraints.txt + PIP_CONSTRAINT
 # (charset-normalizer==3.4.9) so the dry-run resolver cannot pick 3.5.2's
 # android_24_arm64_v8a wheel that host pip cannot install.
-requirements = python3,kivy,numpy,opencv,pillow,pyjnius,android,camera4kivy
+# camera4kivy needs gestures4kivy; CameraX Java comes from ./camerax_provider via p4a.hook
+requirements = python3,kivy,numpy,opencv,pillow,pyjnius,android,camera4kivy,gestures4kivy
 
 orientation = portrait
 fullscreen = 0
+# Camera4Kivy README historically capped api at 33 for camerax packages; 35 is fine
+# with androidx CameraX 1.2.1 (vendored camerax_provider) on p4a 2026.05.09 / Py 3.14.
 android.api = 35
 android.minapi = 24
 # p4a 2026.05.09 recommends NDK 28c; 25b fails NumPy 2.3 (libc++ unique.cpp).
 android.ndk = 28c
 android.accept_sdk_license = True
 
-# CAMERA for live preview; READ_MEDIA_IMAGES for gallery fallback.
-# No broad WRITE on Android 10+ — MediaStore scoped storage is used instead.
-# READ/WRITE_EXTERNAL_STORAGE kept for API < 29 devices only.
-android.permissions = CAMERA,READ_MEDIA_IMAGES,READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE
+# CAMERA for live preview; RECORD_AUDIO required by camerax_provider hook (unused by us).
+# READ_MEDIA_IMAGES for gallery fallback. No broad WRITE on Android 10+ (MediaStore).
+android.permissions = CAMERA,RECORD_AUDIO,READ_MEDIA_IMAGES,READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE
 
-# 64-bit only — covers almost all current phones; skips armeabi-v7a build time.
+# 64-bit only — CameraX gradle deps are arch-specific; armeabi-v7a crashes on arm64 devices.
 android.archs = arm64-v8a
 android.allow_backup = True
 
-# AndroidX + FileProvider for share (ACTION_SEND content:// URIs)
+# AndroidX (CameraX + FileProvider). CameraX deps also injected by camerax_provider hook.
 android.enable_androidx = True
 android.gradle_dependencies = androidx.core:core:1.12.0
 android.add_resources = %(source.dir)s/assets/android/file_paths.xml:xml/file_paths.xml
-# Best-effort if buildozer/p4a supports it (many releases ignore this key):
+# Best-effort FileProvider XML merge (many buildozer releases ignore this key):
 android.extra_manifest_application_xml = %(source.dir)s/assets/android/fileprovider_snippet.xml
-# Reliable inject: patch AndroidManifest + ensure @xml/file_paths before Gradle
-p4a.hook = %(source.dir)s/assets/android/p4a_fileprovider_hook.py
+# Chains CameraX gradle_options (before) + FileProvider inject (after)
+p4a.hook = %(source.dir)s/assets/android/p4a_hook.py
 
 # Icons + splash (pastel eye / cream canvas)
 icon.filename = %(source.dir)s/assets/icon.png

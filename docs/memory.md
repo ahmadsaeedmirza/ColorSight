@@ -4,6 +4,20 @@ Newest entries first. Append after every prompt per `rules.md`.
 
 ---
 
+## 2026-11-15 — Real Android Camera / Lens (Camera4Kivy)
+
+**Prompt:** APK Camera/Lens showed synthetic color bars — Android source was a stub with silent FakeFrameSource fallback. Wire real camera; no `/core` / vision-test / existing-test changes.
+
+**Decision:** Camera4Kivy + vendored `camerax_provider/` (CameraX) for p4a 2026.05.09 / Py 3.14 / api 35 / arm64-v8a. No silent Android fake. Desktop: OpenCV, else labeled “Test pattern”.
+
+**Impl:** `AndroidCameraSource` — tiny invisible `Preview`, `connect_camera(enable_analyze_pixels=True, analyze_pixels_resolution=640, enable_video=False)`, RGBA→RGB (+ front mirror), latest-frame drop → existing pipeline. Permission callback; error card (permission / no camera / start failed) + Retry / Open settings. Flip / disconnect on leave/pause. Capture → MediaStore. FPS debug shows `N fps · W×H`. `camera_event` logs to diagnostics.
+
+**Packaging:** `gestures4kivy` in requirements; `p4a.hook` = `assets/android/p4a_hook.py` (CameraX before + FileProvider after). CI fails if CAMERA or CameraX classes missing.
+
+**Tests:** `tests/test_camera_source.py` (session state + fakes). Docs: architecture decision, production device steps, rules, phases. User commits. On-device FPS row in production.md left blank for device fill-in.
+
+---
+
 ## 2026-11-15 — Photos Android pick / save / share (real phone)
 
 **Prompt:** APK “Choose a photo” was a silent no-op. Fix Photo Picker + URI→cache, MediaStore save, FileProvider share, CI manifest gate, unit tests, docs. No `/core` / vision-test / existing-test changes.

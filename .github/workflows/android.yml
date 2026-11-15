@@ -97,13 +97,12 @@ jobs:
           path: bin/*.apk
           if-no-files-found: error
 
-      - name: Verify FileProvider in APK manifest
+      - name: Verify FileProvider + Camera in APK
         if: success()
         run: |
           set -euo pipefail
           APK=$(ls bin/*.apk | head -n 1)
-          echo "Checking FileProvider in $APK"
-          # Prefer aapt from the Buildozer Android SDK; fall back to aapt2 / unzip grep
+          echo "Checking FileProvider + CAMERA + CameraX in $APK"
           SDK_ROOT="${HOME}/.buildozer/android/platform/android-sdk"
           AAPT=""
           if [ -d "$SDK_ROOT/build-tools" ]; then
@@ -114,26 +113,46 @@ jobs:
             DUMP=$("$AAPT" dump xmltree "$APK" AndroidManifest.xml || true)
           fi
           if [ -z "$DUMP" ]; then
-            # Last resort: strings on binary manifest (less precise)
             DUMP=$(unzip -p "$APK" AndroidManifest.xml | strings || true)
           fi
-          echo "$DUMP" | tee fileprovider_manifest_dump.txt | head -n 40
+          echo "$DUMP" | tee apk_manifest_dump.txt | head -n 60
+
+          FAIL=0
           if ! echo "$DUMP" | grep -qi "fileprovider"; then
             echo "::error::FileProvider missing from APK AndroidManifest.xml — share will fail on device"
-            echo "Expected androidx.core.content.FileProvider / *.fileprovider authority"
+            FAIL=1
+          fi
+          if ! echo "$DUMP" | grep -qi "CAMERA"; then
+            echo "::error::CAMERA permission missing from APK AndroidManifest.xml — live camera will fail"
+            FAIL=1
+          fi
+
+          # CameraX provider: Java classes from camerax_provider / androidx.camera
+          STRINGS=$(unzip -l "$APK" | head -n 5; unzip -p "$APK" classes.dex 2>/dev/null | strings || true)
+          # Also scan all dex + lib entries
+          for dex in $(unzip -l "$APK" | awk '/\.dex$/ {print $4}'); do
+            STRINGS="$STRINGS"$'\n'"$(unzip -p "$APK" "$dex" | strings || true)"
+          done
+          echo "$STRINGS" | grep -E -i 'camerax|androidx.camera|org.kivy.camerax' | head -n 20 \
+            | tee camerax_strings.txt || true
+          if ! echo "$STRINGS" | grep -qiE 'androidx.camera|org\.kivy\.camerax|CameraX'; then
+            echo "::error::CameraX provider classes missing from APK — copy camerax_provider and check p4a.hook"
+            FAIL=1
+          fi
+
+          if [ "$FAIL" -ne 0 ]; then
             exit 1
           fi
-          if ! echo "$DUMP" | grep -qi "file_paths"; then
-            echo "::warning::file_paths meta-data string not found in dump (authority check passed)"
-          fi
-          echo "FileProvider OK"
+          echo "FileProvider + CAMERA + CameraX OK"
 
-      - name: Upload FileProvider check dump
+      - name: Upload APK packaging check dump
         if: always()
         uses: actions/upload-artifact@v5
         with:
-          name: fileprovider-manifest-dump
-          path: fileprovider_manifest_dump.txt
+          name: apk-packaging-check
+          path: |
+            apk_manifest_dump.txt
+            camerax_strings.txt
           retention-days: 7
           if-no-files-found: ignore
 

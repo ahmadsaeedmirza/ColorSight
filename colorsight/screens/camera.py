@@ -6,7 +6,6 @@ import logging
 import threading
 import time
 
-import numpy as np
 from kivy.app import App
 from kivy.clock import Clock
 from kivy.metrics import dp
@@ -25,6 +24,8 @@ from colorsight.camera_pipeline import (
     name_loupe_color,
 )
 from colorsight.camera_source import (
+    CameraSessionState,
+    FakeFrameSource,
     create_frame_source,
     open_settings_camera,
     request_camera_permission,
@@ -43,7 +44,7 @@ from colorsight.theme.screen_bg import install_opaque_bg
 from colorsight.theme.tokens import Colors, Fonts, Spacing
 from colorsight.widgets import PastelCard, PrimaryButton, ScreenHeader
 
-log = logging.getLogger(__name__)
+log = logging.getLogger("colorsight")
 
 
 class CameraScreen(Screen):
@@ -55,6 +56,7 @@ class CameraScreen(Screen):
         self._preview_severity = 0.5
         self._saved_severity = 0.5
         self._source = None
+        self._session = CameraSessionState()
         self._frozen = False
         self._frozen_rgb = None
         self._latest_original = None
@@ -66,7 +68,9 @@ class CameraScreen(Screen):
         self._fps_n = 0
         self._fps_t0 = time.time()
         self._fps_value = 0.0
-        self._perm_denied = False
+        self._frame_w = 0
+        self._frame_h = 0
+        self._error_code = None
         self._root = FloatLayout()
         self.add_widget(self._root)
         self._build_chrome()
@@ -130,7 +134,6 @@ class CameraScreen(Screen):
 
     def _build_chrome(self):
         self._root.clear_widgets()
-        # Neutral preview fills the screen; chrome sits on top
         self._stage = LivePreviewStage(size_hint=(1, 1))
         self._root.add_widget(self._stage)
 
@@ -147,7 +150,25 @@ class CameraScreen(Screen):
         )
         self._root.add_widget(self._overlay)
 
-        # Loupe above controls (z-order) so the name pill is never under Strength
+        self._test_pattern_lbl = Label(
+            text="Test pattern",
+            font_name=Fonts.semibold,
+            font_size=dp(12),
+            color=(1, 1, 1, 0.9),
+            size_hint=(None, None),
+            size=(dp(110), dp(28)),
+            pos_hint={"x": 0.02, "top": 0.98},
+            halign="center",
+            valign="middle",
+            opacity=0,
+        )
+        self._test_pattern_lbl.bind(
+            size=lambda *_: setattr(
+                self._test_pattern_lbl, "text_size", self._test_pattern_lbl.size
+            )
+        )
+        self._root.add_widget(self._test_pattern_lbl)
+
         self._loupe = LoupeOverlay()
         self._loupe.opacity = 0
         self._loupe.disabled = True
@@ -162,7 +183,12 @@ class CameraScreen(Screen):
             font_size=dp(11),
             color=Colors.text_muted,
             size_hint=(None, 1),
-            width=dp(64),
+            width=dp(120),
+            halign="right",
+            valign="middle",
+        )
+        self._fps_lbl.bind(
+            size=lambda *_: setattr(self._fps_lbl, "text_size", self._fps_lbl.size)
         )
         header = ScreenHeader(
             title="Camera",
@@ -172,7 +198,6 @@ class CameraScreen(Screen):
         )
         self._overlay.add_widget(header)
 
-        # Cards below header with full width inside side margins
         self._card_host = BoxLayout(
             orientation="vertical",
             size_hint=(1, None),
@@ -182,7 +207,6 @@ class CameraScreen(Screen):
         self._overlay.add_widget(self._card_host)
         self._refresh_cards()
 
-        # Preview spacer — stage already full-bleed behind; this keeps controls at bottom
         self._body = Widget(size_hint=(1, 1))
         self._overlay.add_widget(self._body)
 
@@ -261,19 +285,30 @@ class CameraScreen(Screen):
     def _refresh_cards(self):
         self._card_host.clear_widgets()
         self._card_host.height = dp(0)
-        if self._perm_denied:
+        msg = self._session.friendly_message()
+        if msg:
             card = PastelCard(
-                title="Camera access needed",
-                subtitle="Allow camera access to use live correction. You can enable it in settings.",
+                title=msg,
+                subtitle="Allow camera access or try again. Details are in Settings → Debug → View recent log.",
                 palette="sky",
                 auto_height=True,
                 size_hint_y=None,
             )
             self._card_host.add_widget(card)
-            btn = PrimaryButton(text="Open settings")
-            btn.on_press_cb = lambda *_: open_settings_camera()
-            self._card_host.add_widget(btn)
-            self._card_host.height = dp(200)
+            row = BoxLayout(
+                orientation="horizontal",
+                size_hint_y=None,
+                height=dp(48),
+                spacing=dp(8),
+            )
+            retry = PrimaryButton(text="Retry")
+            retry.on_press_cb = lambda *_: self._retry_camera()
+            row.add_widget(retry)
+            settings = PrimaryButton(text="Open settings")
+            settings.on_press_cb = lambda *_: open_settings_camera()
+            row.add_widget(settings)
+            self._card_host.add_widget(row)
+            self._card_host.height = dp(220)
             return
         if self._profile is None:
             card = PastelCard(
@@ -292,7 +327,6 @@ class CameraScreen(Screen):
     def _center_loupe(self, *_a):
         """Place loupe at preview center, above the control stack."""
         d = self._loupe.width or dp(140)
-        # Preview band: between card_host bottom and controls top
         top = self._card_host.y if self._card_host.height > 0 else self._overlay.top - dp(56)
         bot = self._controls.top if hasattr(self, "_controls") else self._overlay.y + dp(160)
         cy = (top + bot) / 2.0
@@ -304,6 +338,12 @@ class CameraScreen(Screen):
         if self.manager:
             self.manager.current = name
 
+    def _retry_camera(self):
+        self._session.reset()
+        self._error_code = None
+        self._refresh_cards()
+        self._start_camera()
+
     # --- camera loop -----------------------------------------------------
 
     def _start_camera(self):
@@ -313,33 +353,78 @@ class CameraScreen(Screen):
         request_camera_permission(_after_perm)
 
     def _on_perm(self, ok: bool):
-        self._perm_denied = not ok
+        self._session.on_permission(ok)
         self._refresh_cards()
         if not ok:
             return
-        if self._source is None:
-            self._source = create_frame_source()
-        if not self._source.start():
-            # Fall back to fake frames on desktop so the UI is still usable
-            from colorsight.camera_source import FakeFrameSource
 
-            log.warning("Camera open failed — using synthetic frames")
+        if self._source is not None:
+            try:
+                self._source.stop()
+            except Exception:
+                pass
+            self._source = None
+
+        self._source = create_frame_source()
+        # Android Preview must live under a widget parent
+        if hasattr(self._source, "attach_host"):
+            self._source.attach_host(self._root)
+        if hasattr(self._source, "set_first_frame_cb"):
+            self._source.set_first_frame_cb(
+                lambda w, h: self._session.on_first_frame(w, h)
+            )
+
+        started = False
+        try:
+            started = bool(self._source.start())
+        except Exception:
+            log.exception("camera_event start_exception")
+            started = False
+
+        if not started:
+            reason = getattr(self._source, "last_error", None) or "start_failed"
+            if is_android():
+                # Never fall back to synthetic frames on a real phone
+                self._session.on_start_result(False, reason)
+                self._refresh_cards()
+                self._set_status(self._session.friendly_message() or "Camera failed to start")
+                return
+            # Desktop only: webcam missing → labeled test pattern
+            log.warning("camera_event desktop_webcam_failed — synthetic test pattern")
             self._source = FakeFrameSource()
             self._source.start()
-            self._set_status("No webcam — demo frames")
+            self._session.on_start_result(True)
+            self._set_test_pattern_visible(True)
+            self._set_status("Test pattern (no webcam)")
+        else:
+            self._session.on_start_result(True)
+            synthetic = bool(getattr(self._source, "is_synthetic", False))
+            self._set_test_pattern_visible(synthetic)
+            if synthetic:
+                self._set_status("Test pattern")
+
         self._processing = False
         if self._poll_ev is not None:
             self._poll_ev.cancel()
-        # Poll ~20 Hz; worker drops frames if still processing
         self._poll_ev = Clock.schedule_interval(self._tick, 1.0 / 20.0)
+
+    def _set_test_pattern_visible(self, visible: bool):
+        if hasattr(self, "_test_pattern_lbl"):
+            self._test_pattern_lbl.opacity = 1 if visible else 0
 
     def _stop_camera(self):
         if self._poll_ev is not None:
             self._poll_ev.cancel()
             self._poll_ev = None
         if self._source is not None:
-            self._source.stop()
+            try:
+                self._source.stop()
+            except Exception:
+                log.exception("camera_event stop_exception")
+            self._source = None
+        self._session.on_stop()
         self._processing = False
+        self._set_test_pattern_visible(False)
 
     def _tick(self, _dt):
         if self._frozen:
@@ -354,6 +439,7 @@ class CameraScreen(Screen):
         sev = float(self._preview_severity)
         cvd = self._profile.type if self._profile is not None else None
         loupe_on = self._loupe_on
+        fs = getattr(self._source, "frame_size", (0, 0)) or (0, 0)
 
         def _work():
             try:
@@ -369,6 +455,7 @@ class CameraScreen(Screen):
 
             def _blit(_dt=None):
                 self._latest_original = original
+                self._frame_w, self._frame_h = int(fs[0]), int(fs[1])
                 self._stage.set_rgb(display)
                 self._processing = False
                 self._note_fps()
@@ -389,7 +476,12 @@ class CameraScreen(Screen):
             app = App.get_running_app()
             show = bool(getattr(app, "show_camera_fps", False)) if app else False
             if hasattr(self, "_fps_lbl"):
-                self._fps_lbl.text = f"{self._fps_value:.0f} fps" if show else ""
+                if show:
+                    self._fps_lbl.text = (
+                        f"{self._fps_value:.0f} fps · {self._frame_w}×{self._frame_h}"
+                    )
+                else:
+                    self._fps_lbl.text = ""
 
     # --- loupe -----------------------------------------------------------
 
@@ -416,6 +508,7 @@ class CameraScreen(Screen):
         zoom_rgb = loupe_zoom_crop(self._latest_original, cx, cy, zoom=self._loupe.zoom)
         self._loupe.set_zoom_rgb(zoom_rgb)
         try:
+            # name_color on original (uncorrected) frame
             name, med = name_loupe_color(self._latest_original, cx, cy)
             name = self._smoother.push(name)
             corr = None
@@ -482,7 +575,6 @@ class CameraScreen(Screen):
 
     def _capture(self):
         src = self._frozen_rgb if self._frozen and self._frozen_rgb is not None else self._stage.current_rgb()
-        # Prefer re-processing full latest original at current mode for quality
         base = None
         if self._frozen and getattr(self, "_frozen_original", None) is not None:
             base = self._frozen_original
@@ -504,9 +596,14 @@ class CameraScreen(Screen):
                     out = frame
                 else:
                     out = render_mode_rgb(frame, mode, cvd_type=cvd, severity=sev)
-                msg = save_corrected_image(out, preferred_name=f"ColorSight_Camera_{mode}", fmt="jpg")
-            except Exception:
+                msg = save_corrected_image(
+                    out, preferred_name=f"ColorSight_Camera_{mode}", fmt="jpg"
+                )
+            except Exception as exc:
                 log.exception("capture failed")
+                text = str(exc).strip()
+                if text and "/" not in text and "\\" not in text:
+                    msg = text
 
             def _done(_dt=None):
                 self._set_status(msg)
@@ -521,4 +618,4 @@ class CameraScreen(Screen):
 
     def _set_status(self, text: str):
         if hasattr(self, "_status"):
-            self._status.text = text
+            self._status.text = text or ""

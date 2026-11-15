@@ -89,20 +89,29 @@ python main.py   # open Camera; Settings → Show camera FPS
 
 | Topic | Notes |
 |-------|--------|
-| Desktop | OpenCV `VideoCapture(0)`; falls back to synthetic frames if open fails |
-| Android | Runtime `CAMERA` via `request_camera_permission`; denied → rationale card + “Open settings”. Prefer Camera4Kivy (`camera4kivy` in `buildozer.spec`) |
-| Pipeline | Latest-frame drop; live longest ≈ **560 px**; bg process + blit; start on enter / stop on leave; pause/resume |
-| Capture | Saves current mode to ColorSight album (MediaStore / Pictures) — no paths in UI |
-| Lens | Nav item opens Camera with loupe on (shared widgets) |
+| Desktop | OpenCV `VideoCapture(0)`; if open fails → synthetic **Test pattern** (labeled) only |
+| Android | Camera4Kivy + `camerax_provider` CameraX; runtime `CAMERA`; denied / no camera / start fail → error card with **Retry** + **Open settings** (never silent fake) |
+| Pipeline | Analyze ~640 long side → latest-frame drop; live longest ≈ **560 px**; bg process + blit; `connect_camera` on enter / `disconnect_camera` on leave/pause; flip via `select_camera` |
+| Capture | Current mode → MediaStore album **ColorSight** — no paths in UI |
+| Lens | Nav opens Camera with loupe on; `name_color` on original frame |
+| Packaging | `p4a.hook` = `assets/android/p4a_hook.py` (CameraX gradle + FileProvider); `gestures4kivy` in requirements |
 
-#### Measured FPS (desktop smoke / fake source)
+#### Measured FPS
 
 | Setup | Approx. processed FPS |
 |-------|------------------------|
 | FakeFrameSource @ 20 Hz, Corrected mode, 390×844 window (Intel UHD 620) | **~15–20** (poll 20 Hz; drops if still processing) |
-| Mid-range phone target | **15+** with live longest ≤560; enable Settings → Show camera FPS on device to record |
+| Mid-range phone (on-device) | _Record after install: Settings → Show camera FPS → note `N fps · W×H` here_ |
 
-Known limits: first OpenCV open can lag; Android Camera4Kivy preview wiring may need a device pass to attach the Preview widget callback into `AndroidCameraSource.push_frame_rgb`. Heavy Simulation + loupe on low-end devices may dip below 15 fps — drop frames rather than queue.
+Enable **Settings → Show camera FPS** on device to see real fps + analysis frame size. Heavy Simulation + loupe on low-end devices may dip below 15 fps — drop frames rather than queue.
+
+### Camera / Lens device checklist
+
+1. Uninstall old APK, install fresh build; open Camera (and Lens from nav).
+2. Grant CAMERA when prompted — live preview (not color bars). Deny once → card “Camera permission denied” → Open settings / Retry.
+3. Flip camera (front mirrored, back upright). Freeze / Capture → “Saved to your gallery” → Gallery album **ColorSight**.
+4. Lens: loupe names colors from the **original** frame; Corrected mode still shows correction on the stage.
+5. Background the app → resume → preview restarts. If anything fails: **Settings → Debug → View recent log** (`camera_event …` lines).
 
 ## Cloud build (GitHub Actions) — preferred
 
@@ -268,8 +277,9 @@ Sign with a proper keystore before Play Store distribution (not configured yet).
 | OpenCV recipe fails | Keep unpinned `opencv` in requirements; clean `.buildozer` and rebuild; ensure NDK **28c** matches `android.ndk` |
 | NDK/SDK download stuck | Check disk space (~20+ GB); retry; set `ANDROIDSDK` / `ANDROIDNDK` if you already have them |
 | Cython / Kivy mismatch | Prefer unpinned `kivy` (recipe picks a 3.14-compatible build); `pip3 install --user 'cython<3'` only if an older recipe still needs it |
-| Camera4Kivy missing classes | Confirm `camera4kivy` in requirements; add/update gradle deps per Camera4Kivy docs; clean build |
-| Permission denied at runtime | CAMERA / READ_MEDIA_IMAGES declared; app requests CAMERA at runtime — use Settings → Open settings card if denied |
+| Camera4Kivy / CameraX missing | Ensure `./camerax_provider` is vendored; `p4a.hook` = `assets/android/p4a_hook.py`; `gestures4kivy` + `camera4kivy` in requirements; `android.enable_androidx = True`; CI must pass CameraX/CAMERA checks |
+| Color-bar “camera” on phone | Old silent FakeFrameSource fallback — fixed; if seen again, rebuild with CameraX provider and check log for `camera_event` |
+| Permission denied at runtime | CAMERA declared; request at runtime — use error card **Open settings** / **Retry** |
 | Share crashes | Ensure FileProvider authority `${applicationId}.fileprovider` and `@xml/file_paths` are in the final APK manifest |
 | `buildozer` not found | `pip3 install --user buildozer` and ensure `~/.local/bin` is on `PATH` |
 | Corrupt / half-built p4a venv | Delete `.buildozer/android/platform/build-*/build/venv` (or the whole `.buildozer` tree) and rebuild; on Actions, clear the `buildozer-*` cache then re-run |
@@ -346,9 +356,8 @@ Must ship with the APK:
 - [ ] Floating nav + safe areas on a notched phone; nothing under the nav
 - [ ] Vision Test → Save profile; Profile shows type / severity / date / axes
 - [ ] Photos pick / save / share steps above
-- [ ] Camera: permission deny → Open settings; live Corrected; freeze/capture; FPS overlay
-- [ ] Lens nav enables loupe; `name_color` stable
-- [ ] Record on-device FPS (Settings → Show camera FPS) and note mid-range phone numbers
+- [ ] Camera / Lens device checklist above (live preview, not color bars; permission card; flip; capture; loupe)
+- [ ] Record on-device FPS + frame size (Settings → Show camera FPS) into the Measured FPS table
 
 ## Known issues / notes
 
@@ -356,8 +365,8 @@ Must ship with the APK:
 - **p4a 2026.05.09**: defaults to Python 3.14; keep recipe deps unpinned; constrain charset-normalizer via **`PIP_CONSTRAINT` / `constraints.txt`**; use NDK **28c** and **arm64-v8a only** (see troubleshooting).
 - **APK is 64-bit only** (`arm64-v8a`) — covers almost all current phones; no `armeabi-v7a` slice.
 - **Python 3.13 desktop**: if Kivy wheels fail, use 3.11/3.12 in the venv.
-- **Camera4Kivy**: desktop uses OpenCV; Android Preview widget callback may need a device pass to fully wire `AndroidCameraSource.push_frame_rgb`.
-- **FileProvider**: `p4a.hook` + `add_resources`; CI fails the build if the APK manifest lacks FileProvider. If share still fails on device, check Settings → View recent log and the `fileprovider-manifest-dump` artifact.
+- **Camera**: Camera4Kivy + CameraX via `camerax_provider`; no Android synthetic fallback. Desktop OpenCV / labeled Test pattern only.
+- **FileProvider / Camera packaging**: `assets/android/p4a_hook.py` chains CameraX + FileProvider; CI fails if FileProvider, CAMERA permission, or CameraX classes are missing.
 - **Radius 999**: always clamp (see `design.md`).
 - Soft shadows are layered rounded rects, not Material elevation.
 
@@ -365,6 +374,6 @@ Must ship with the APK:
 
 - Title **ColorSight**; `org.colorsight.colorsight`; single **`version = 0.1.0`** (no `version.regex` / `version.filename`)
 - Portrait; **`android.api = 35`** / min 24; **`android.archs = arm64-v8a`** (64-bit only); **`android.ndk = 28c`**
-- Requirements: `python3,kivy,numpy,opencv,pillow,pyjnius,android,camera4kivy` — do not re-add old kivy/numpy/pillow `==` pins; charset-normalizer via `constraints.txt` + `PIP_CONSTRAINT` in CI
-- CAMERA + READ_MEDIA_IMAGES (+ legacy storage); FileProvider via `android.add_resources` + `p4a.hook` + AndroidX `androidx.core:core`; icon / adaptive / cream splash
-- Cloud CI: `.github/workflows/android.yml` (manual + `build-apk` branch); FileProvider APK check; failure artifacts: last 1500 lines + full log (3-day retention)
+- Requirements: `python3,kivy,numpy,opencv,pillow,pyjnius,android,camera4kivy,gestures4kivy` — no old kivy/numpy/pillow `==` pins; charset-normalizer via `constraints.txt` + `PIP_CONSTRAINT`
+- CAMERA + RECORD_AUDIO (+ media/storage); CameraX via vendored `camerax_provider`; FileProvider + CameraX via `p4a.hook`; AndroidX; icon / adaptive / cream splash
+- Cloud CI: FileProvider + CAMERA + CameraX APK checks; failure log artifacts (3-day retention)

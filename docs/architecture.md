@@ -22,14 +22,18 @@ ColorSight/
 └── colorsight/
     ├── image_pipeline.py   # EXIF load, resize≤1080, before/after split, encode
     ├── photo_io.py         # Desktop chooser; Android Photo Picker + MediaStore + FileProvider share
+    ├── camera_source.py    # OpenCV / FakeFrameSource / AndroidCameraSource (Camera4Kivy)
     ├── logging_setup.py    # Rotating diagnostics log (Settings → View recent log)
     └── screens/
         ├── photos.py / photo_widgets.py   # Photos correction UI
+        ├── camera.py / camera_widgets.py / lens.py
         └── test_screen.py / test_widgets.py
 assets/android/
     ├── file_paths.xml              # FileProvider cache-path (ColorSightShare/)
     ├── fileprovider_snippet.xml    # <provider> XML for manifest merge
-    └── p4a_fileprovider_hook.py    # Injects FileProvider into AndroidManifest before Gradle
+    ├── p4a_fileprovider_hook.py    # FileProvider inject helper
+    └── p4a_hook.py                 # Chains CameraX gradle_options + FileProvider
+camerax_provider/                   # Vendored CameraX Java + gradle_options (Camera4Kivy)
 ```
 
 ## Live Vision Test — Cambridge Colour Test Trivector (`core/trivector.py`)
@@ -111,15 +115,25 @@ Reuses **`core.apply_correction`**, **`core.apply_simulation`**, and **`Correcti
 
 ## Camera + Lens (shared live pipeline)
 
+### Decision: Camera4Kivy + CameraX (not silent fake)
+
+| Choice | Why |
+|--------|-----|
+| **Primary: Camera4Kivy + vendored `camerax_provider/`** | Official Android path for Kivy; ImageAnalysis pixels → our pipeline. Works with p4a **2026.05.09** / Python **3.14** / **arm64-v8a** / `android.api=35` when the provider hook + AndroidX deps are present. |
+| **Not used: silent `FakeFrameSource` on Android** | Was the bug (color-bar “camera”). Android now shows a clear error card (permission / no camera / start failed) + Retry / Open settings. |
+| **Desktop fallback only** | OpenCV webcam; if open fails → labeled **Test pattern** synthetic frames (never mistaken for a camera). |
+| **Alternatives if Camera4Kivy breaks** | (1) Kivy built-in `Camera` Android provider, (2) thin pyjnius CameraX/Camera2 `ImageReader` bridge — only if Camera4Kivy cannot build; document any switch here. |
+
 | Piece | Role |
 |-------|------|
-| `camera_source.py` | Desktop OpenCV webcam; `FakeFrameSource` for smoke; Android Camera4Kivy hook + runtime CAMERA permission |
-| `camera_pipeline.py` | BGR↔RGB, live downscale (~560), loupe median/zoom crop, `LabelSmoother`, `name_loupe_color` → `core.name_color` |
-| `screens/camera.py` | Full-bleed preview; mode pill; Strength; freeze/capture; loupe toggle; flip (Android) |
+| `camera_source.py` | `OpenCVWebcamSource`; `FakeFrameSource` (desktop/smoke); `AndroidCameraSource` (Camera4Kivy `Preview` + `analyze_pixels_callback` @ ~640 long side); `CameraSessionState`; runtime CAMERA permission |
+| `camera_pipeline.py` | BGR↔RGB, live downscale (~560), loupe median/zoom crop, `LabelSmoother`, `name_loupe_color` → `core.name_color` (always on **original** frame) |
+| `screens/camera.py` | Full-bleed `LivePreviewStage`; tiny invisible Preview host; mode / Strength / freeze / capture / loupe / flip; FPS+size debug line |
 | `screens/lens.py` | Redirects to Camera with loupe enabled (no duplicated pipeline) |
 | `screens/camera_widgets.py` | `LivePreviewStage`, `LoupeOverlay`, `CameraModeToolbar` |
+| `camerax_provider/` | Vendored CameraX Java + `gradle_options.py` (chained from `assets/android/p4a_hook.py`) |
 
-Frame loop: latest-frame drop (no queue) → bg thread process → single texture blit. Start on enter / stop on leave; app pause/resume. Default Corrected + Strength from saved profile when present.
+Frame loop: `connect_camera` on enter (after permission) → analyze pixels → latest-frame drop → bg thread (Original/Corrected/Simulation) → single texture blit. `disconnect_camera` on leave/pause. Capture → MediaStore `Pictures/ColorSight`. All camera events go to the diagnostics log.
 
 Helpers/widgets also: Photos `BeforeAfterViewer`, `PhotoModeToolbar`, `PreviewSeverityBar`, `TextLinkButton`, `LoadingShimmer`. Callbacks use `*_cb` names only.
 
