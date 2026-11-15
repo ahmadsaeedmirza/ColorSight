@@ -370,7 +370,9 @@ class PhotosScreen(Screen):
 
     def _on_pick_error(self, msg: str):
         log.warning("pick error: %s", msg)
-        Clock.schedule_once(lambda dt: self._set_status("Couldn't open the photo picker"), 0)
+        # Friendly copy from photo_io — never a filesystem path
+        text = (msg or "").strip() or "Couldn't open the photo picker"
+        Clock.schedule_once(lambda dt: self._set_status(text), 0)
 
     def _on_picked(self, path: str | None):
         def _apply(_dt=None):
@@ -493,8 +495,11 @@ class PhotosScreen(Screen):
                     msg = share_image(rgb, preferred_name=name, fmt="jpg")
                 else:
                     msg = save_corrected_image(rgb, preferred_name=name, fmt="jpg")
-            except Exception:
+            except Exception as exc:
                 log.exception("export failed")
+                text = str(exc).strip()
+                if text and "/" not in text and "\\" not in text:
+                    msg = text
 
             def _done(_dt=None):
                 if hasattr(self, "_shimmer"):
@@ -528,8 +533,11 @@ class PhotosScreen(Screen):
                     msg = share_image(card, preferred_name=name, fmt="jpg")
                 else:
                     msg = save_corrected_image(card, preferred_name=name, fmt="jpg")
-            except Exception:
+            except Exception as exc:
                 log.exception("comparison export failed")
+                text = str(exc).strip()
+                if text and "/" not in text and "\\" not in text:
+                    msg = text
 
             def _done(_dt=None):
                 if hasattr(self, "_shimmer"):

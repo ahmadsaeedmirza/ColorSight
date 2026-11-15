@@ -21,10 +21,15 @@ ColorSight/
 ├── tools/               # flow_trivector.py, flow_photos.py, smoke_photos_ui.py
 └── colorsight/
     ├── image_pipeline.py   # EXIF load, resize≤1080, before/after split, encode
-    ├── photo_io.py         # Desktop chooser; Android Photo Picker + MediaStore
+    ├── photo_io.py         # Desktop chooser; Android Photo Picker + MediaStore + FileProvider share
+    ├── logging_setup.py    # Rotating diagnostics log (Settings → View recent log)
     └── screens/
         ├── photos.py / photo_widgets.py   # Photos correction UI
         └── test_screen.py / test_widgets.py
+assets/android/
+    ├── file_paths.xml              # FileProvider cache-path (ColorSightShare/)
+    ├── fileprovider_snippet.xml    # <provider> XML for manifest merge
+    └── p4a_fileprovider_hook.py    # Injects FileProvider into AndroidManifest before Gradle
 ```
 
 ## Live Vision Test — Cambridge Colour Test Trivector (`core/trivector.py`)
@@ -97,11 +102,11 @@ Reuses **`core.apply_correction`**, **`core.apply_simulation`**, and **`Correcti
 | Step | Behavior |
 |------|----------|
 | Profile gate | Load via `storage.profile_path()` / `app.correction_profile`. No profile → pink CTA card → Test. |
-| Pick | Desktop: tkinter jpg/png/webp. Android 13+: Photo Picker (`PICK_IMAGES`); older: `GET_CONTENT` + optional `READ_MEDIA_IMAGES` / `READ_EXTERNAL_STORAGE`. |
+| Pick | Desktop: tkinter jpg/png/webp (unchanged). Android 13+: system Photo Picker via `MediaStore.ACTION_PICK_IMAGES` + `startActivityForResult` / `android.activity.bind(on_activity_result=…)`; older or picker-fail → `ACTION_GET_CONTENT` + `CATEGORY_OPENABLE` chooser. `content://` → app-cache temp via `ContentResolver.openInputStream` (no `READ_EXTERNAL_STORAGE` on 13+). Failures → friendly UI status + diagnostics log (never silent). |
 | Preview | Longest side ≤ **1080**; bg thread + shimmer; ~100 ms Strength debounce; cache Corrected/Simulation for instant mode toggle. |
 | Modes | Default **Corrected** (whole image filtered). Divider starts at **0%** (handle at left); drag right to reveal original. Reset to 0% on Corrected↔Simulation and new pick. Original = no divider. |
 | Strength | Reloaded from disk on every Photos enter; percent-rounded. Preview-only. |
-| Save / Share | Full-res for **current mode** + current Strength. MediaStore + FileProvider / desktop fallback. |
+| Save / Share | Full-res for **current mode** + current Strength. Android 10+: MediaStore `RELATIVE_PATH=Pictures/ColorSight` → “Saved to your gallery”. Share: FileProvider `content://` + `FLAG_GRANT_READ_URI_PERMISSION` (`org.colorsight.colorsight.fileprovider`). Desktop share → save fallback. |
 | Comparison | `build_comparison_card` — “Normal vision” \| “How I see it”, ≤2048. |
 
 ## Camera + Lens (shared live pipeline)

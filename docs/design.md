@@ -194,7 +194,7 @@ Apply the **same** clamped value to fill **and** matching shadow layers. Used by
 ### Photos screen recipe
 
 - **No profile:** pink `PastelCard` + “Go to Vision Test” (never show paths).
-- **Empty:** pink card + large “Choose a photo”.
+- **Empty:** pink card + large “Choose a photo” (Android: system Photo Picker / content chooser; failures show a friendly status — never a silent no-op; no paths in UI).
 - **Viewer:** opens in Corrected with filter on the **whole** image (divider **0%**, handle at left, ≥44 dp, inside bounds). Drag right to reveal original. One-time session hint: “Drag the handle to compare with the original.”
 - **Strength:** reloaded from disk every enter; “Reset to my result” when changed.
 - **Actions:** Save/Share current mode; Export comparison; no paths in UI.

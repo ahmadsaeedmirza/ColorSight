@@ -16,7 +16,7 @@
 | **UI polish** — Chip auto-width/scroll, inverted-T D-pad + keyboard arrows, ScreenHeader gap/top inset | Done |
 | Plate generator (legacy) — kept + tested, not in live UI | Done |
 | Trivector core + calibration tests | Done |
-| **Photos** — pick, Corrected@0% divider, Strength, save/share, comparison | Done |
+| **Photos** — pick (Photo Picker / GET_CONTENT), Corrected@0% divider, Strength, MediaStore save, FileProvider share, comparison | Done |
 | **Camera** — live OpenCV / Camera4Kivy pipeline, freeze/capture | Done |
 | **Lens** — shared loupe + `name_color` | Done |
 | **Profile** — hero card, swatches, fine-tune (only overwrite), clear | Done |

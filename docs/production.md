@@ -65,13 +65,14 @@ If mode taps crash with `NoneType is not callable`, check that Photos widgets do
 
 ### Android share (FileProvider)
 
-Share uses `Intent.ACTION_SEND` + `FileProvider` URI (`photo_io._share_android`). Packaging needs:
+Share uses `Intent.ACTION_SEND` + `FileProvider` URI (`photo_io._share_android`) with `FLAG_GRANT_READ_URI_PERMISSION`. Packaging:
 
 | Piece | Location |
 |-------|----------|
-| Paths XML | `assets/android/file_paths.xml` → `@xml/file_paths` (`android.add_resources` in `buildozer.spec`) |
-| Manifest `<provider>` | Merge `assets/android/fileprovider_snippet.xml` into `<application>` (authority `${applicationId}.fileprovider`) |
-| Maven | `androidx.core:core` (listed in `buildozer.spec`) |
+| Paths XML | `assets/android/file_paths.xml` → `@xml/file_paths` via `android.add_resources` |
+| Manifest `<provider>` | `p4a.hook` = `assets/android/p4a_fileprovider_hook.py` injects authority `org.colorsight.colorsight.fileprovider` before Gradle (reliable). Optional `android.extra_manifest_application_xml` = `fileprovider_snippet.xml` if the buildozer key is supported. |
+| AndroidX | `android.enable_androidx = True` + `android.gradle_dependencies = androidx.core:core:1.12.0` |
+| CI gate | After build, workflow unzips/dumps the APK manifest and **fails** if `fileprovider` is missing |
 
 Desktop Share falls back to saving into `Pictures/ColorSight/` and showing “Saved to your gallery”.
 
@@ -116,7 +117,7 @@ Build the debug APK in the cloud so you do **not** need a local Buildozer/WSL to
    - Push any commit to a branch named **`build-apk`**.
 4. Wait for the job (first run can take **1–3+ hours**; later runs reuse `~/.buildozer` + `./.buildozer` cache).
 
-Workflow file: `.github/workflows/android.yml` (ubuntu-22.04, Java 17, `cython==0.29.36`, `buildozer -v android debug`, timeout 360 min).
+Workflow file: `.github/workflows/android.yml` (ubuntu-22.04, Java 17, `cython==0.29.36`, `buildozer -v android debug`, timeout 360 min). After a successful build the job **verifies FileProvider** is present in the APK manifest (fails the run with a clear error if missing) and uploads a `fileprovider-manifest-dump` artifact.
 
 ### Download the APK
 
@@ -248,11 +249,13 @@ Sign with a proper keystore before Play Store distribution (not configured yet).
 
 | Item | Wired how |
 |------|-----------|
-| `file_paths.xml` | `android.add_resources` → `@xml/file_paths` |
-| Manifest `<provider>` | Merge `assets/android/fileprovider_snippet.xml` into the generated manifest if share fails (p4a may not auto-merge; verify on device) |
+| `file_paths.xml` | `android.add_resources` → `@xml/file_paths` (+ hook fallback copy) |
+| Manifest `<provider>` | `p4a.hook` (`p4a_fileprovider_hook.py`) + optional `android.extra_manifest_application_xml` |
+| AndroidX FileProvider class | `android.enable_androidx` + `androidx.core:core` gradle dep |
+| CI verify | `.github/workflows/android.yml` → “Verify FileProvider in APK manifest” |
 | `core/*`, `colorsight/*`, `assets/**` | `source.include_patterns` |
 | Icon / splash | `assets/icon.png`, `presplash.png`, adaptive foreground/background |
-| Portrait + api 33 / min 24 / **arm64-v8a only** + NDK **28c** | `buildozer.spec` (64-bit APK; covers almost all current phones) |
+| Portrait + api **35** / min 24 / **arm64-v8a only** + NDK **28c** | `buildozer.spec` |
 
 ### Troubleshooting (typical failures)
 
@@ -289,13 +292,17 @@ Declared in `buildozer.spec` / AndroidManifest (via Buildozer):
 
 | API | Pick | Save |
 |-----|------|------|
-| **13+ (API 33+)** | System **Photo Picker** (`android.provider.action.PICK_IMAGES`) via pyjnius — **no** broad storage permission | `MediaStore` insert with `RELATIVE_PATH=Pictures/ColorSight` (scoped storage) |
-| **10–12** | `ACTION_GET_CONTENT` / openable URI → copy to app temp | Same MediaStore path; no `WRITE_EXTERNAL_STORAGE` needed |
-| **≤9** | May need `READ_EXTERNAL_STORAGE` runtime grant (`ensure_read_images_permission`) | MediaStore or app `getExternalFilesDir` fallback |
+| **13+ (API 33+)** | `MediaStore.ACTION_PICK_IMAGES` via `PythonActivity.mActivity.startActivityForResult` + `android.activity.bind(on_activity_result=…)` (unbind after). **No** `READ_EXTERNAL_STORAGE`. | `MediaStore` insert with `RELATIVE_PATH=Pictures/ColorSight`, `IS_PENDING` clear → “Saved to your gallery” |
+| **10–12** | Fallback `ACTION_GET_CONTENT` + `CATEGORY_OPENABLE` chooser (also used if Photo Picker intent fails) → URI → app cache | Same MediaStore path; no `WRITE_EXTERNAL_STORAGE` |
+| **≤9** | May need `READ_EXTERNAL_STORAGE` (`ensure_read_images_permission`) | MediaStore or `getExternalFilesDir` fallback |
+
+URI copy: `ContentResolver.openInputStream` → temp under app `getCacheDir()/ColorSightPick/`, then existing EXIF + resize pipeline. Share staging uses `getCacheDir()/ColorSightShare/` (FileProvider `cache-path`). Errors always surface a friendly status line and log a traceback to the diagnostics log.
 
 Desktop: tkinter file chooser; save under `~/Pictures/ColorSight/`.
 
-`pyjnius` + `android` are already in `buildozer.spec` requirements for these bridges.
+`pyjnius` + `android` are in `buildozer.spec` requirements for these bridges.
+
+Unit tests: `python -m unittest tests.test_photo_io -v` (stream copy helper + friendly error paths).
 
 ## Asset packaging (fonts & icons)
 
@@ -313,18 +320,32 @@ Must ship with the APK:
 
 ## Testing checklist (device)
 
-**Verified on desktop (this repo):** unit suite, trivector/photos/camera smokes, Welcome/Home/Profile/Settings UI logic.
+**Verified on desktop (this repo):** unit suite (incl. `tests.test_photo_io`), trivector/photos/camera smokes, Welcome/Home/Profile/Settings UI logic.
 
 **Not verified without a real device / APK build** — please run these yourself:
+
+### Photos on a real phone (pick / save / share)
+
+1. Install a fresh APK (`adb uninstall org.colorsight.colorsight` then `adb install …`).
+2. Complete or load a correction profile (Photos needs one).
+3. **Pick:** Photos → **Choose a photo** → system Photo Picker (Android 13+) or content chooser opens. Select an image → preview appears. Cancel should clear without a crash. If something fails, a friendly status appears (not a silent no-op) — open **Settings → Debug → View recent log** for the traceback.
+4. **Save:** With Corrected/Simulation/Original, tap Save → status **“Saved to your gallery”**. Open the phone Gallery / Photos app → album **ColorSight** (`Pictures/ColorSight`) and confirm the image is there.
+5. **Share:** Tap Share → system share sheet opens with the image. Send to Files / WhatsApp / Drive. If the sheet never opens, check the log for FileProvider errors and that CI’s FileProvider step passed for that build.
+6. **Comparison:** Save/Share “How I see it” card the same way.
+
+### Diagnostics log
+
+- In-app: **Settings → Debug → View recent log** (no filesystem paths shown in the UI).
+- Failures from pick/save/share write full tracebacks here (`colorsight` logger / rotating file under `user_data_dir`).
+
+### Broader device checks
 
 - [ ] APK installs (`adb install`) and opens without crash
 - [ ] First launch → Welcome → color test; later launch → Home
 - [ ] Android back button returns to Home from feature screens
 - [ ] Floating nav + safe areas on a notched phone; nothing under the nav
 - [ ] Vision Test → Save profile; Profile shows type / severity / date / axes
-- [ ] Photos: Android 13+ Photo Picker (no all-files grant); Corrected @ 0% divider; Save + Share sheet
-- [ ] MediaStore album **ColorSight** appears in Gallery
-- [ ] FileProvider share to WhatsApp / Files works
+- [ ] Photos pick / save / share steps above
 - [ ] Camera: permission deny → Open settings; live Corrected; freeze/capture; FPS overlay
 - [ ] Lens nav enables loupe; `name_color` stable
 - [ ] Record on-device FPS (Settings → Show camera FPS) and note mid-range phone numbers
@@ -336,7 +357,7 @@ Must ship with the APK:
 - **APK is 64-bit only** (`arm64-v8a`) — covers almost all current phones; no `armeabi-v7a` slice.
 - **Python 3.13 desktop**: if Kivy wheels fail, use 3.11/3.12 in the venv.
 - **Camera4Kivy**: desktop uses OpenCV; Android Preview widget callback may need a device pass to fully wire `AndroidCameraSource.push_frame_rgb`.
-- **FileProvider**: resources are packaged; if share fails, manually merge `fileprovider_snippet.xml`.
+- **FileProvider**: `p4a.hook` + `add_resources`; CI fails the build if the APK manifest lacks FileProvider. If share still fails on device, check Settings → View recent log and the `fileprovider-manifest-dump` artifact.
 - **Radius 999**: always clamp (see `design.md`).
 - Soft shadows are layered rounded rects, not Material elevation.
 
@@ -345,5 +366,5 @@ Must ship with the APK:
 - Title **ColorSight**; `org.colorsight.colorsight`; single **`version = 0.1.0`** (no `version.regex` / `version.filename`)
 - Portrait; **`android.api = 35`** / min 24; **`android.archs = arm64-v8a`** (64-bit only); **`android.ndk = 28c`**
 - Requirements: `python3,kivy,numpy,opencv,pillow,pyjnius,android,camera4kivy` — do not re-add old kivy/numpy/pillow `==` pins; charset-normalizer via `constraints.txt` + `PIP_CONSTRAINT` in CI
-- CAMERA + READ_MEDIA_IMAGES (+ legacy storage); FileProvider via `android.add_resources`; icon / adaptive / cream splash
-- Cloud CI: `.github/workflows/android.yml` (manual + `build-apk` branch); failure artifacts: last 1500 lines + full log (3-day retention)
+- CAMERA + READ_MEDIA_IMAGES (+ legacy storage); FileProvider via `android.add_resources` + `p4a.hook` + AndroidX `androidx.core:core`; icon / adaptive / cream splash
+- Cloud CI: `.github/workflows/android.yml` (manual + `build-apk` branch); FileProvider APK check; failure artifacts: last 1500 lines + full log (3-day retention)

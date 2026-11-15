@@ -33,9 +33,14 @@ android.permissions = CAMERA,READ_MEDIA_IMAGES,READ_EXTERNAL_STORAGE,WRITE_EXTER
 android.archs = arm64-v8a
 android.allow_backup = True
 
-# FileProvider paths for share sheet
-android.add_maven_dependency = androidx.core:core:1.12.0
+# AndroidX + FileProvider for share (ACTION_SEND content:// URIs)
+android.enable_androidx = True
+android.gradle_dependencies = androidx.core:core:1.12.0
 android.add_resources = %(source.dir)s/assets/android/file_paths.xml:xml/file_paths.xml
+# Best-effort if buildozer/p4a supports it (many releases ignore this key):
+android.extra_manifest_application_xml = %(source.dir)s/assets/android/fileprovider_snippet.xml
+# Reliable inject: patch AndroidManifest + ensure @xml/file_paths before Gradle
+p4a.hook = %(source.dir)s/assets/android/p4a_fileprovider_hook.py
 
 # Icons + splash (pastel eye / cream canvas)
 icon.filename = %(source.dir)s/assets/icon.png

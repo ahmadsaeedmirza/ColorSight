@@ -4,6 +4,24 @@ Newest entries first. Append after every prompt per `rules.md`.
 
 ---
 
+## 2026-11-15 — Photos Android pick / save / share (real phone)
+
+**Prompt:** APK “Choose a photo” was a silent no-op. Fix Photo Picker + URI→cache, MediaStore save, FileProvider share, CI manifest gate, unit tests, docs. No `/core` / vision-test / existing-test changes.
+
+**Pick (`photo_io.py`):** `PythonActivity.mActivity.startActivityForResult` + `android.activity.bind(on_activity_result=…)` / unbind. API 33+: `MediaStore.ACTION_PICK_IMAGES` (no chooser wrapper). Fallback: `ACTION_GET_CONTENT` + `CATEGORY_OPENABLE`. `content://` → `ContentResolver.openInputStream` → app `cache/ColorSightPick/`; then EXIF/resize pipeline. Failures → friendly UI + log traceback (never silent). Desktop tkinter unchanged.
+
+**Save / Share:** MediaStore `RELATIVE_PATH=Pictures/ColorSight` → “Saved to your gallery”. Share staging under `cache/ColorSightShare/`; FileProvider authority `org.colorsight.colorsight.fileprovider` + `FLAG_GRANT_READ_URI_PERMISSION`.
+
+**Packaging:** `android.enable_androidx`, `android.gradle_dependencies=androidx.core:core:1.12.0`, `android.add_resources` → `@xml/file_paths`, `p4a.hook=assets/android/p4a_fileprovider_hook.py` (reliable `<provider>` inject; optional `extra_manifest_application_xml`).
+
+**CI:** After APK build, dump manifest / strings and **fail** if `fileprovider` missing; upload dump artifact.
+
+**Tests:** `tests/test_photo_io.py` — `copy_stream_to_path` + pick/save/share error paths (29 tests OK with image/photos pipeline).
+
+**Docs:** `architecture.md`, `production.md` (device pick/save/share steps + Settings → Debug → View recent log), `rules.md`, this entry. User commits.
+
+---
+
 ## 2026-11-15 — Phone UI batch: theme, chips, camera, diagnostics
 
 **Prompt:** Real-phone UI batch (1080×2400): black transition flash; Home chip centering/scroll; Vision Test pressed states; Camera layout/loupe clip; System/Light/Dark theme with neutral accuracy surfaces; on-device log viewer; GHA action majors. No `/core` / vision-test logic / scoring / existing-test changes. **Do not commit** (user pushes).

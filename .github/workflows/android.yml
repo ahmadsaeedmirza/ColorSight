@@ -97,6 +97,46 @@ jobs:
           path: bin/*.apk
           if-no-files-found: error
 
+      - name: Verify FileProvider in APK manifest
+        if: success()
+        run: |
+          set -euo pipefail
+          APK=$(ls bin/*.apk | head -n 1)
+          echo "Checking FileProvider in $APK"
+          # Prefer aapt from the Buildozer Android SDK; fall back to aapt2 / unzip grep
+          SDK_ROOT="${HOME}/.buildozer/android/platform/android-sdk"
+          AAPT=""
+          if [ -d "$SDK_ROOT/build-tools" ]; then
+            AAPT=$(ls -d "$SDK_ROOT"/build-tools/*/aapt 2>/dev/null | sort -V | tail -n 1 || true)
+          fi
+          DUMP=""
+          if [ -n "$AAPT" ] && [ -x "$AAPT" ]; then
+            DUMP=$("$AAPT" dump xmltree "$APK" AndroidManifest.xml || true)
+          fi
+          if [ -z "$DUMP" ]; then
+            # Last resort: strings on binary manifest (less precise)
+            DUMP=$(unzip -p "$APK" AndroidManifest.xml | strings || true)
+          fi
+          echo "$DUMP" | tee fileprovider_manifest_dump.txt | head -n 40
+          if ! echo "$DUMP" | grep -qi "fileprovider"; then
+            echo "::error::FileProvider missing from APK AndroidManifest.xml — share will fail on device"
+            echo "Expected androidx.core.content.FileProvider / *.fileprovider authority"
+            exit 1
+          fi
+          if ! echo "$DUMP" | grep -qi "file_paths"; then
+            echo "::warning::file_paths meta-data string not found in dump (authority check passed)"
+          fi
+          echo "FileProvider OK"
+
+      - name: Upload FileProvider check dump
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: fileprovider-manifest-dump
+          path: fileprovider_manifest_dump.txt
+          retention-days: 7
+          if-no-files-found: ignore
+
       - name: Prepare failure logs
         if: failure()
         run: |
