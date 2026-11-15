@@ -14,13 +14,14 @@ python tools/run_unit_tests.py
 # python -m unittest discover -s tests -v
 ```
 
-**CI headless testing:** the GHA `preflight` job installs `xvfb` + SDL/GL libs and runs:
+**CI headless testing:** the GHA `preflight` job installs `xvfb` + SDL/GL libs, pip-installs `numpy` / `pillow` / **`opencv-python-headless`** / `kivy` (core tests import `cv2`), and runs:
 
 ```bash
-xvfb-run -a -s "-screen 0 1280x800x24" python tools/run_unit_tests.py
+COLORSIGHT_SKIP_GUI=1 COLORSIGHT_HEADLESS=1 \
+  xvfb-run -a -s "-screen 0 1280x800x24" python tools/run_unit_tests.py
 ```
 
-with `COLORSIGHT_HEADLESS=1`, `KIVY_NO_ARGS=1`. GUI tests (`test_lens_nav`, `test_chip_centering`, `test_theme_rebuild`) call `tests.gui_guard.ensure_kivy_window` and **SkipTest** if Window/OpenGL still fails — they must never abort with X-server exit 102. Desktop smoke / phone-sim GUIs stay **local-only** (`tools/smoke_*.py`, `tools/run_phone_sim.py`).
+`COLORSIGHT_SKIP_GUI=1` skips importing GUI modules on CI (lens/chip/theme). Those GUI tests still exist and run locally; they call `tests.gui_guard.ensure_kivy_window` and **SkipTest** if Window/OpenGL is unavailable — never abort with X-server exit 102. Desktop smoke / phone-sim stay **local-only** (`tools/smoke_*.py`, `tools/run_phone_sim.py`).
 
 On **WSL/Linux** you can mirror CI with the same `xvfb-run` line. On **Windows**, run `python tools/preflight.py` + unit tests with a real desktop session (or `COLORSIGHT_SKIP_GUI=1`).
 

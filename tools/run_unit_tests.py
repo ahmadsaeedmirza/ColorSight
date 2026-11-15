@@ -48,9 +48,20 @@ def main() -> int:
     else:
         suite = loader.discover(start_dir=str(ROOT / "tests"), pattern="test_*.py")
 
-    runner = unittest.TextTestRunner(verbosity=1)
+    verbosity = 2 if os.environ.get("CI", "").strip().lower() in {"1", "true"} else 1
+    runner = unittest.TextTestRunner(verbosity=verbosity)
     result = runner.run(suite)
-    return 0 if result.wasSuccessful() else 1
+    if not result.wasSuccessful():
+        print(
+            f"UNIT TESTS FAILED: failures={len(result.failures)} "
+            f"errors={len(result.errors)} skipped={len(result.skipped)}",
+            file=sys.stderr,
+        )
+        return 1
+    print(
+        f"UNIT TESTS OK: ran={result.testsRun} skipped={len(result.skipped)}"
+    )
+    return 0
 
 
 if __name__ == "__main__":

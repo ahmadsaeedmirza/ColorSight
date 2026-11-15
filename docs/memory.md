@@ -4,6 +4,14 @@ Newest entries first. Append after every prompt per `rules.md`.
 
 ---
 
+## 2026-11-16 — Preflight unit tests need opencv-headless
+
+**Prompt:** After xvfb fix, unit-test step still exited 1 (truncated log showed only FileProvider lines). Cause: preflight pip installed kivy/numpy/pillow but **not OpenCV** — `core` tests import `cv2`. No app logic changes.
+
+**Fix:** Install `opencv-python-headless` in preflight; keep `COLORSIGHT_SKIP_GUI=1` on CI; clearer `run_unit_tests` failure summary. Docs updated.
+
+---
+
 ## 2026-11-16 — Fix preflight headless X-server abort
 
 **Prompt:** GHA `preflight` died with “Couldn't connect to X server” / exit 102 when Kivy imported a Window on ubuntu; `build` never started. No `/core` / vision-test / app / assertion changes.
