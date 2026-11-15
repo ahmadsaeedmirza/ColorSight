@@ -27,9 +27,11 @@ android.minapi = 24
 android.ndk = 28c
 android.accept_sdk_license = True
 
-# CAMERA for live preview; RECORD_AUDIO required by camerax_provider hook (unused by us).
-# READ_MEDIA_IMAGES for gallery fallback. No broad WRITE on Android 10+ (MediaStore).
-android.permissions = CAMERA,RECORD_AUDIO,READ_MEDIA_IMAGES,READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE
+# CAMERA for live preview; READ_MEDIA_IMAGES for gallery fallback.
+# No RECORD_AUDIO — we never record video/audio. camerax_provider may still add it
+# in before_apk_build; assets/android/p4a_hook.py strips it from the final manifest.
+# No broad WRITE on Android 10+ (MediaStore).
+android.permissions = CAMERA,READ_MEDIA_IMAGES,READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE
 
 # 64-bit only — CameraX gradle deps are arch-specific; armeabi-v7a crashes on arm64 devices.
 android.archs = arm64-v8a

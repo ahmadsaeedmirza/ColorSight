@@ -126,7 +126,7 @@ Build the debug APK in the cloud so you do **not** need a local Buildozer/WSL to
    - Push any commit to a branch named **`build-apk`**.
 4. Wait for the job (first run can take **1–3+ hours**; later runs reuse `~/.buildozer` + `./.buildozer` under cache key **`buildozer-v2-`**, excluding `build/venv`).
 
-Workflow file: `.github/workflows/android.yml` (ubuntu-22.04, Java 17, `cython==0.29.36`, `buildozer -v android debug`, timeout 360 min). Before each build the job deletes `build/venv` so p4a cannot corrupt pip. After a successful build it **verifies FileProvider + CAMERA + CameraX** in the APK (fails with a clear error if missing).
+Workflow file: `.github/workflows/android.yml` (ubuntu-22.04, Java 17, `cython==0.29.36`, `buildozer -v android debug`, timeout 360 min). Before each build the job deletes `build/venv` so p4a cannot corrupt pip. The APK artifact uploads with **`if: always()`** whenever `bin/*.apk` exists (a failed packaging check must not hide a built APK). After a successful build it **verifies FileProvider + CAMERA + CameraX** by writing dumps to files and grepping those files (never `echo | grep` under `pipefail` — that caused a false CameraX failure on run #4).
 
 ### Download the APK
 
@@ -167,6 +167,8 @@ Sim: **540×1200** window at **`KIVY_METRICS_DENSITY=1.375`** (half-scale of 108
 | NDK 25b / NumPy `unordered_map` | Use **`android.ndk = 28c`** |
 | `charset-normalizer` android wheel on host pip | p4a **drops** `requirements=` pins for pure-Python pip modules, so a `buildozer.spec` pin is ignored. Use repo-root **`constraints.txt`** (`charset-normalizer==3.4.9`) and set **`PIP_CONSTRAINT`** on the Buildozer step (see workflow) so every pip call — including the dry-run resolver — honors it |
 | **p4a `build/venv` + `capture_logging` ImportError** | p4a re-creates `build/venv` with `python -m venv` **on top of an existing one**, which mixes pip versions (`ImportError: cannot import name 'capture_logging'`). **Always** `rm -rf .buildozer/android/platform/build-*/build/venv` before a build (workflow + `tools/build_android.sh` do this). **Never cache** that venv (Actions cache uses `buildozer-v2-` + path exclusion). Keep `other_builds` / `python-installs` so rebuilds stay fast. |
+| **CI packaging check false fail (`pipefail` + Broken pipe)** | Under `set -euo pipefail`, `echo "$BIG" \| grep …` (or `\| head`) can exit non-zero when grep/head closes early → Broken pipe → `! pipeline` looks like a missing CameraX/FileProvider hit even when the APK is fine. **Fix:** write dumps to files (`apk_manifest_dump.txt`, `apk_dex_strings.txt`) and `grep -qiE pattern file` with no pipes; use `\|\| true` on display `head`/`tee` pipes. |
+| **RECORD_AUDIO in manifest** | camerax_provider’s hook adds it for video+audio; ColorSight never records. `p4a_hook.py` strips `RECORD_AUDIO` from the generated `AndroidManifest.xml` after inject. |
 | Corrupt Buildozer / p4a tree | If wiping only `build/venv` is not enough, delete more of `.buildozer/` or clear the Actions `buildozer-v2-*` cache and rebuild |
 | Old kivy/numpy/pillow pins on Python 3.14 | Keep those **unpinned**; single `version = 0.1.0` (no `version.regex`) |
 | **UI stuck in a ~390 px box (bottom-left) on phone** | Desktop `Window.size` / Config **390×844** was also applied on Android. Guard with `platform not in ('android','ios')` in `main.py`; never set window size in `app.py` on device. Use `tools/run_phone_sim.py` to catch this |
@@ -294,6 +296,7 @@ Declared in `buildozer.spec` / AndroidManifest (via Buildozer):
 | Permission | Why |
 |------------|-----|
 | `CAMERA` | Live Camera / Lens — request at runtime with rationale + settings fallback |
+| `RECORD_AUDIO` | **Not** in the final APK — camerax_provider may inject it; `p4a_hook.py` strips it (we never record) |
 | `READ_MEDIA_IMAGES` (API 33+) | Fallback gallery access on older flows |
 | `READ_EXTERNAL_STORAGE` | Pre-13 gallery fallback |
 | `WRITE_EXTERNAL_STORAGE` | Legacy pre-10 only; **not** required for MediaStore saves on Android 10+ |
@@ -376,5 +379,5 @@ Must ship with the APK:
 - Title **ColorSight**; `org.colorsight.colorsight`; single **`version = 0.1.0`** (no `version.regex` / `version.filename`)
 - Portrait; **`android.api = 35`** / min 24; **`android.archs = arm64-v8a`** (64-bit only); **`android.ndk = 28c`**
 - Requirements: `python3,kivy,numpy,opencv,pillow,pyjnius,android,camera4kivy,gestures4kivy` — no old kivy/numpy/pillow `==` pins; charset-normalizer via `constraints.txt` + `PIP_CONSTRAINT`
-- CAMERA + RECORD_AUDIO (+ media/storage); CameraX via vendored `camerax_provider`; FileProvider + CameraX via `p4a.hook`; AndroidX; icon / adaptive / cream splash
-- Cloud CI: FileProvider + CAMERA + CameraX APK checks; failure log artifacts (3-day retention)
+- CAMERA (+ media/storage); no RECORD_AUDIO in the final manifest (stripped by `p4a_hook.py`); CameraX via vendored `camerax_provider`; FileProvider + CameraX via `p4a.hook`; AndroidX; icon / adaptive / cream splash
+- Cloud CI: FileProvider + CAMERA + CameraX APK checks (file-based grep, no pipefail false fails); APK artifact `if: always()`; failure log artifacts (3-day retention)

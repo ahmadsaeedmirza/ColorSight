@@ -99,53 +99,66 @@ jobs:
           buildozer -v android debug 2>&1 | tee buildozer-ci.log
           ls -la bin/*.apk
 
+      # Upload even if the packaging check fails so a built APK is never hidden.
       - name: Upload APK
-        if: success()
+        if: always()
         uses: actions/upload-artifact@v5
         with:
           name: colorsight-apk
           path: bin/*.apk
-          if-no-files-found: error
+          if-no-files-found: ignore
 
       - name: Verify FileProvider + Camera in APK
         if: success()
         run: |
           set -euo pipefail
-          APK=$(ls bin/*.apk | head -n 1)
+          shopt -s nullglob
+          apks=(bin/*.apk)
+          if [ "${#apks[@]}" -eq 0 ]; then
+            echo "::error::No APK found under bin/ to verify"
+            exit 1
+          fi
+          APK="${apks[0]}"
           echo "Checking FileProvider + CAMERA + CameraX in $APK"
+
           SDK_ROOT="${HOME}/.buildozer/android/platform/android-sdk"
           AAPT=""
           if [ -d "$SDK_ROOT/build-tools" ]; then
             AAPT=$(ls -d "$SDK_ROOT"/build-tools/*/aapt 2>/dev/null | sort -V | tail -n 1 || true)
           fi
-          DUMP=""
+
+          # Write dump to a file first — never use `echo | grep` under pipefail
+          # (Broken pipe makes `! pipeline` a false failure).
+          : > apk_manifest_dump.txt
           if [ -n "$AAPT" ] && [ -x "$AAPT" ]; then
-            DUMP=$("$AAPT" dump xmltree "$APK" AndroidManifest.xml || true)
+            "$AAPT" dump xmltree "$APK" AndroidManifest.xml > apk_manifest_dump.txt 2>/dev/null || true
           fi
-          if [ -z "$DUMP" ]; then
-            DUMP=$(unzip -p "$APK" AndroidManifest.xml | strings || true)
+          if [ ! -s apk_manifest_dump.txt ]; then
+            unzip -p "$APK" AndroidManifest.xml 2>/dev/null | strings > apk_manifest_dump.txt || true
           fi
-          echo "$DUMP" | tee apk_manifest_dump.txt | head -n 60
+          head -n 60 apk_manifest_dump.txt || true
 
           FAIL=0
-          if ! echo "$DUMP" | grep -qi "fileprovider"; then
+          if ! grep -qi "fileprovider" apk_manifest_dump.txt; then
             echo "::error::FileProvider missing from APK AndroidManifest.xml — share will fail on device"
             FAIL=1
           fi
-          if ! echo "$DUMP" | grep -qi "CAMERA"; then
+          if ! grep -qi "CAMERA" apk_manifest_dump.txt; then
             echo "::error::CAMERA permission missing from APK AndroidManifest.xml — live camera will fail"
             FAIL=1
           fi
 
-          # CameraX provider: Java classes from camerax_provider / androidx.camera
-          STRINGS=$(unzip -l "$APK" | head -n 5; unzip -p "$APK" classes.dex 2>/dev/null | strings || true)
-          # Also scan all dex + lib entries
-          for dex in $(unzip -l "$APK" | awk '/\.dex$/ {print $4}'); do
-            STRINGS="$STRINGS"$'\n'"$(unzip -p "$APK" "$dex" | strings || true)"
+          # CameraX provider classes in any classes*.dex (file-based grep, no pipes)
+          : > apk_dex_strings.txt
+          mapfile -t DEXES < <(unzip -Z1 "$APK" | grep -E '\.dex$' || true)
+          for dex in "${DEXES[@]}"; do
+            unzip -p "$APK" "$dex" 2>/dev/null | strings >> apk_dex_strings.txt || true
           done
-          echo "$STRINGS" | grep -E -i 'camerax|androidx.camera|org.kivy.camerax' | head -n 20 \
-            | tee camerax_strings.txt || true
-          if ! echo "$STRINGS" | grep -qiE 'androidx.camera|org\.kivy\.camerax|CameraX'; then
+          { grep -iE 'camerax|androidx\.camera|org\.kivy\.camerax' apk_dex_strings.txt | head -n 20 || true; } \
+            > camerax_strings.txt || true
+          head -n 20 camerax_strings.txt || true
+
+          if ! grep -qiE 'androidx\.camera|org\.kivy\.camerax|CameraX' apk_dex_strings.txt; then
             echo "::error::CameraX provider classes missing from APK — copy camerax_provider and check p4a.hook"
             FAIL=1
           fi
@@ -162,6 +175,7 @@ jobs:
           name: apk-packaging-check
           path: |
             apk_manifest_dump.txt
+            apk_dex_strings.txt
             camerax_strings.txt
           retention-days: 7
           if-no-files-found: ignore

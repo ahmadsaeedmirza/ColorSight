@@ -4,6 +4,14 @@ Newest entries first. Append after every prompt per `rules.md`.
 
 ---
 
+## 2026-11-15 — Fix CI packaging-check false fail (run #4)
+
+**Prompt:** Run #4 APK built + CameraX strings present, but “Verify FileProvider + Camera” failed. Cause: `set -euo pipefail` + `echo \| grep` Broken pipe. No `/core` / vision-test / app / existing-test changes.
+
+**Fix:** File-based greps (`apk_manifest_dump.txt`, `apk_dex_strings.txt`); display pipes `|| true`. APK upload `if: always()` when `bin/*.apk` exists. Strip unused `RECORD_AUDIO` from final manifest in `p4a_hook.py` (camerax_provider adds it; we never record). Docs + `rules.md`. Commit + push `master`.
+
+---
+
 ## 2026-11-15 — Fix CI p4a build/venv pip corruption (run #3)
 
 **Prompt:** GHA run #3 failed: cache restored `.buildozer` including `build/venv`; p4a ran `python -m venv` over it; `pip install -U pip` → `ImportError: cannot import name 'capture_logging'`. Same on WSL re-runs. No `/core` / vision-test / app / existing-test changes. **Do not commit** (user pushes).

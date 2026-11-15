@@ -40,3 +40,25 @@ def after_apk_build(toolchain) -> None:
     mod = _load_module(fp, "colorsight_fileprovider_hook")
     mod.after_apk_build(toolchain)
     print("[ColorSight p4a_hook] FileProvider after_apk_build OK")
+    # Camera4Kivy camerax_provider adds RECORD_AUDIO for video+audio; we never
+    # record. Strip it from the generated manifest (safe — Preview still works).
+    _strip_record_audio(toolchain)
+
+
+def _strip_record_audio(toolchain) -> None:
+    dist = Path(toolchain._dist.dist_dir)
+    manifest = dist / "src" / "main" / "AndroidManifest.xml"
+    if not manifest.is_file():
+        return
+    text = manifest.read_text(encoding="utf-8")
+    lines = text.splitlines(keepends=True)
+    kept = [
+        line
+        for line in lines
+        if "RECORD_AUDIO" not in line
+    ]
+    if len(kept) == len(lines):
+        print("[ColorSight p4a_hook] RECORD_AUDIO not in manifest — OK")
+        return
+    manifest.write_text("".join(kept), encoding="utf-8")
+    print("[ColorSight p4a_hook] Removed RECORD_AUDIO from AndroidManifest.xml")
