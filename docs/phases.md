@@ -16,9 +16,9 @@
 | **UI polish** — Chip auto-width/scroll, inverted-T D-pad + keyboard arrows, ScreenHeader gap/top inset | Done |
 | Plate generator (legacy) — kept + tested, not in live UI | Done |
 | Trivector core + calibration tests | Done |
-| **Photos** — pick (Photo Picker / GET_CONTENT), Corrected@0% divider, Strength, MediaStore save, FileProvider share, comparison | Done |
+| **Photos** — androidstorage4kivy Chooser (+ legacy picker fallback), Corrected@0% divider, Strength, SharedStorage/MediaStore save, FileProvider share, comparison | Done |
 | **Camera** — live OpenCV (desktop) / Camera4Kivy+CameraX (Android), freeze/capture, no silent fake | Done |
-| **Lens** — shared loupe + `name_color` on original frames | Done |
+| **Lens** — Camera loupe state (post-transition enable) + `name_color` on original ~5 Hz; GPU live preview | Done |
 | **Theme rebuild + safe insets + Vision Test tutorial** | Done |
 | **Profile** — hero card, swatches, fine-tune (only overwrite), clear | Done |
 | **Settings** — About, Privacy, Display tips, FPS debug | Done |

@@ -39,8 +39,8 @@ class TestFrameHelpers(unittest.TestCase):
 
     def test_downscale_live(self):
         rgb = np.zeros((1200, 1600, 3), dtype=np.uint8)
-        out = downscale_live(rgb, longest=560)
-        self.assertEqual(max(out.shape[:2]), 560)
+        out = downscale_live(rgb, longest=640)
+        self.assertEqual(max(out.shape[:2]), 640)
         self.assertEqual(out.dtype, np.uint8)
 
     def test_loupe_patch_median(self):

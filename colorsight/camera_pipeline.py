@@ -8,7 +8,7 @@ import numpy as np
 
 from colorsight.image_pipeline import resize_longest, rgb_to_bgr, bgr_to_rgb
 
-LIVE_LONGEST = 560  # ~480–640 band for mid-range phones
+LIVE_LONGEST = 640  # analysis ~640×480; drop to 480 via env if a device still stutters
 LOUPE_PATCH = 9
 LOUPE_DIAMETER_DP = 140
 DEFAULT_ZOOM = 2.5

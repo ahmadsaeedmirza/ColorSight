@@ -33,12 +33,14 @@ def pictures_dir() -> Path:
 
 
 def _ui(cb: Callable, *args) -> None:
-    """Marshal callbacks onto the Kivy main thread when an app is running."""
+    """Marshal callbacks onto the Kivy main thread when the event loop is live."""
     try:
         from kivy.app import App
+        from kivy.base import EventLoop
         from kivy.clock import Clock
 
-        if App.get_running_app() is not None:
+        # Only defer when the app is actually pumping Clock (not unit tests)
+        if App.get_running_app() is not None and getattr(EventLoop, "status", None) == "started":
             Clock.schedule_once(lambda _dt: cb(*args), 0)
             return
     except Exception:
@@ -59,6 +61,7 @@ def pick_image(
     on_error: Callable[[str], None] | None = None,
 ) -> None:
     """Open a photo picker; callback receives a local file path or None (cancel)."""
+    log.info("photos: choose tapped android=%s", is_android())
     try:
         if is_android():
             _pick_android(on_picked, on_error=on_error)
@@ -147,8 +150,64 @@ def _android_activity():
 def _pick_android(
     on_picked: Callable[[str | None], None], *, on_error=None
 ) -> None:
-    """Photo Picker (API 33+) via startActivityForResult; else ACTION_GET_CONTENT."""
+    """Prefer androidstorage4kivy Chooser; fall back to legacy pyjnius picker."""
     ensure_read_images_permission()
+    log.info("photos: pick_android start")
+    if _pick_android_storage4kivy(on_picked, on_error=on_error):
+        return
+    log.warning("photos: androidstorage4kivy unavailable — legacy picker")
+    _pick_android_legacy(on_picked, on_error=on_error)
+
+
+def _pick_android_storage4kivy(
+    on_picked: Callable[[str | None], None], *, on_error=None
+) -> bool:
+    """Return True if Chooser was launched successfully."""
+    try:
+        from androidstorage4kivy import Chooser, SharedStorage  # type: ignore
+    except Exception as exc:
+        log.info("photos: androidstorage4kivy import failed: %s", exc)
+        return False
+
+    def _callback(shared_file_list):
+        log.info(
+            "photos: chooser callback n=%s",
+            0 if not shared_file_list else len(shared_file_list),
+        )
+        try:
+            if not shared_file_list:
+                log.info("photos: chooser cancelled/empty")
+                _ui(on_picked, None)
+                return
+            ss = SharedStorage()
+            private = ss.copy_from_shared(shared_file_list[0])
+            if not private:
+                raise RuntimeError("copy_from_shared returned empty")
+            path = str(private)
+            log.info("photos: chooser ok (copied to app cache)")
+            _ui(on_picked, path)
+        except Exception as exc:  # noqa: BLE001
+            _log_exc("photos: chooser callback failed", exc)
+            if callable(on_error):
+                _ui(on_error, "Couldn't read that photo. Try another one.")
+            _ui(on_picked, None)
+
+    try:
+        # Keep a strong ref so the Chooser is not GC'd before the callback
+        chooser = Chooser(_callback)
+        pick_image._active_chooser = chooser  # type: ignore[attr-defined]
+        log.info("photos: launching Chooser image/*")
+        chooser.choose_content("image/*")
+        return True
+    except Exception as exc:
+        _log_exc("photos: Chooser.choose_content failed", exc)
+        return False
+
+
+def _pick_android_legacy(
+    on_picked: Callable[[str | None], None], *, on_error=None
+) -> None:
+    """Legacy Photo Picker / GET_CONTENT via startActivityForResult."""
     try:
         from android.activity import bind as activity_bind  # type: ignore
         from android.activity import unbind as activity_unbind  # type: ignore
@@ -169,23 +228,22 @@ def _pick_android(
             if int(request_code) != _REQ_PICK:
                 return
             if int(result_code) != RESULT_OK or intent is None:
-                log.info("photo pick cancelled or empty result")
+                log.info("photos: legacy pick cancelled or empty")
                 _ui(on_picked, None)
                 return
             try:
                 uri = intent.getData()
                 if uri is None:
-                    # Some pickers put URI in clip data
                     clip = intent.getClipData()
                     if clip is not None and clip.getItemCount() > 0:
                         uri = clip.getItemAt(0).getUri()
                 if uri is None:
                     raise RuntimeError("No image was returned")
                 path = _android_uri_to_tempfile(uri)
-                log.info("photo pick ok")
+                log.info("photos: legacy pick ok")
                 _ui(on_picked, path)
             except Exception as exc:  # noqa: BLE001
-                _log_exc("photo pick result failed", exc)
+                _log_exc("photos: legacy pick result failed", exc)
                 if callable(on_error):
                     _ui(on_error, "Couldn't read that photo. Try another one.")
                 _ui(on_picked, None)
@@ -196,7 +254,6 @@ def _pick_android(
         used_picker = False
         if sdk >= 33:
             try:
-                # Direct Photo Picker — do NOT wrap in createChooser
                 action = getattr(
                     MediaStore,
                     "ACTION_PICK_IMAGES",
@@ -217,11 +274,13 @@ def _pick_android(
             used_picker = False
 
         log.info(
-            "starting photo pick sdk=%s photo_picker=%s", sdk, used_picker
+            "photos: legacy startActivityForResult sdk=%s photo_picker=%s",
+            sdk,
+            used_picker,
         )
         activity.startActivityForResult(intent, _REQ_PICK)
     except Exception as exc:  # noqa: BLE001
-        _log_exc("android pick launch failed", exc)
+        _log_exc("photos: legacy pick launch failed", exc)
         if callable(on_error):
             _ui(on_error, "Couldn't open the photo picker. Try again.")
         _ui(on_picked, None)
@@ -392,13 +451,36 @@ def _share_android(path: Path) -> None:
 
 
 def _save_android_mediastore(rgb, filename: str) -> str:
-    """Insert into MediaStore.Images (RELATIVE_PATH=Pictures/ColorSight on API 29+)."""
+    """Insert into MediaStore / SharedStorage (album ColorSight)."""
     from colorsight.image_pipeline import encode_image
     from jnius import autoclass  # type: ignore
 
     tmp_dir = _android_cache_dir("ColorSightMedia")
     tmp = tmp_dir / filename
     encode_image(rgb, tmp, quality=95)
+
+    # Prefer androidstorage4kivy SharedStorage → Pictures/<app>/… (album ColorSight)
+    try:
+        from androidstorage4kivy import SharedStorage  # type: ignore
+        from jnius import autoclass  # type: ignore
+
+        Environment = autoclass("android.os.Environment")
+        ss = SharedStorage()
+        shared = ss.copy_to_shared(
+            str(tmp),
+            collection=Environment.DIRECTORY_PICTURES,
+            filepath=f"ColorSight/{filename}",
+        )
+        if shared is not None:
+            log.info("photos: SharedStorage.copy_to_shared ok")
+            try:
+                tmp.unlink(missing_ok=True)
+            except Exception:
+                pass
+            return "Saved to your gallery"
+        log.warning("photos: copy_to_shared returned None — MediaStore fallback")
+    except Exception as exc:
+        log.info("photos: SharedStorage save unavailable: %s", exc)
 
     try:
         activity = _android_activity()

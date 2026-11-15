@@ -67,18 +67,31 @@ class _Smoke(ColorSightApp):
                 cam._toggle_freeze()
                 assert not cam._frozen
                 log.append("freeze_capture_ok")
-                # Lens redirect
-                lens = sm.get_screen("lens")
-                sm.current = "lens"
-                assert sm.current == "camera"
-                assert cam._loupe_on
-                log.append("lens_redirect_ok")
-                # Clean shutdown
-                cam.on_leave()
-                assert cam._poll_ev is None
-                log.append("shutdown_ok")
-                print("SMOKE_CAMERA_OK", " ".join(log))
-                self.stop()
+                # Lens is a Camera loupe state (via RootShell._navigate)
+                self.root._navigate("lens")
+
+                def _after_lens(_dt4):
+                    assert sm.current == "camera"
+                    assert cam._loupe_on
+                    assert self.root.nav.active == "lens"
+                    log.append("lens_redirect_ok")
+                    # Camera nav clears loupe
+                    self.root._navigate("camera")
+
+                    def _after_cam(_dt5):
+                        assert sm.current == "camera"
+                        assert not cam._loupe_on
+                        log.append("camera_clears_loupe_ok")
+                        # Clean shutdown
+                        cam.on_leave()
+                        assert cam._poll_ev is None
+                        log.append("shutdown_ok")
+                        print("SMOKE_CAMERA_OK", " ".join(log))
+                        self.stop()
+
+                    Clock.schedule_once(_after_cam, 0.15)
+
+                Clock.schedule_once(_after_lens, 0.15)
 
             Clock.schedule_once(_wait_frame, 0.4)
 

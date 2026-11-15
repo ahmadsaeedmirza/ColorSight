@@ -15,7 +15,8 @@ version = 0.1.0
 # (charset-normalizer==3.4.9) so the dry-run resolver cannot pick 3.5.2's
 # android_24_arm64_v8a wheel that host pip cannot install.
 # camera4kivy needs gestures4kivy; CameraX Java comes from ./camerax_provider via p4a.hook
-requirements = python3,kivy,numpy,opencv,pillow,pyjnius,android,camera4kivy,gestures4kivy
+# androidstorage4kivy is pure-Python (py3-none-any) — Chooser + SharedStorage for Photos
+requirements = python3,kivy,numpy,opencv,pillow,pyjnius,android,camera4kivy,gestures4kivy,androidstorage4kivy
 
 orientation = portrait
 fullscreen = 0

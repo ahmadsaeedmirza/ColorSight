@@ -21,8 +21,10 @@ ColorSight/
 ├── tools/               # flow_trivector.py, flow_photos.py, smoke_photos_ui.py
 └── colorsight/
     ├── image_pipeline.py   # EXIF load, resize≤1080, before/after split, encode
-    ├── photo_io.py         # Desktop chooser; Android Photo Picker + MediaStore + FileProvider share
+    ├── photo_io.py         # Desktop chooser; androidstorage4kivy Chooser + SharedStorage (+ legacy fallback)
     ├── camera_source.py    # OpenCV / FakeFrameSource / AndroidCameraSource (Camera4Kivy)
+    ├── camera_gpu.py       # Live preview fragment-shader mat3 (≡ core._apply_matrix)
+    ├── exception_guard.py  # Kivy ExceptionHandler → log + PASS
     ├── logging_setup.py    # Rotating diagnostics log (Settings → View recent log)
     └── screens/
         ├── photos.py / photo_widgets.py   # Photos correction UI
@@ -106,11 +108,11 @@ Reuses **`core.apply_correction`**, **`core.apply_simulation`**, and **`Correcti
 | Step | Behavior |
 |------|----------|
 | Profile gate | Load via `storage.profile_path()` / `app.correction_profile`. No profile → pink CTA card → Test. |
-| Pick | Desktop: tkinter jpg/png/webp (unchanged). Android 13+: system Photo Picker via `MediaStore.ACTION_PICK_IMAGES` + `startActivityForResult` / `android.activity.bind(on_activity_result=…)`; older or picker-fail → `ACTION_GET_CONTENT` + `CATEGORY_OPENABLE` chooser. `content://` → app-cache temp via `ContentResolver.openInputStream` (no `READ_EXTERNAL_STORAGE` on 13+). Failures → friendly UI status + diagnostics log (never silent). |
+| Pick | Desktop: tkinter jpg/png/webp (unchanged). Android: prefer **`androidstorage4kivy.Chooser`** (`choose_content('image/*')`) → `SharedStorage.copy_from_shared` into app-private cache → existing EXIF/resize pipeline. Automatic fallback: legacy pyjnius Photo Picker (`ACTION_PICK_IMAGES`) / `GET_CONTENT` + URI→cache. Tap always shows “Opening gallery…” and logs every step (`photos: …`) to the diagnostics log. Settings → Debug → **Test photo picker**. |
 | Preview | Longest side ≤ **1080**; bg thread + shimmer; ~100 ms Strength debounce; cache Corrected/Simulation for instant mode toggle. |
 | Modes | Default **Corrected** (whole image filtered). Divider starts at **0%** (handle at left); drag right to reveal original. Reset to 0% on Corrected↔Simulation and new pick. Original = no divider. |
 | Strength | Reloaded from disk on every Photos enter; percent-rounded. Preview-only. |
-| Save / Share | Full-res for **current mode** + current Strength. Android 10+: MediaStore `RELATIVE_PATH=Pictures/ColorSight` → “Saved to your gallery”. Share: FileProvider `content://` + `FLAG_GRANT_READ_URI_PERMISSION` (`org.colorsight.colorsight.fileprovider`). Desktop share → save fallback. |
+| Save / Share | Full-res for **current mode** + current Strength. Android: prefer `SharedStorage.copy_to_shared` into Pictures (album **ColorSight**); MediaStore insert remains the fallback → “Saved to your gallery”. Share: FileProvider `content://` + `FLAG_GRANT_READ_URI_PERMISSION` (`org.colorsight.colorsight.fileprovider`). Desktop share → save fallback. |
 | Comparison | `build_comparison_card` — “Normal vision” \| “How I see it”, ≤2048. |
 
 ## Camera + Lens (shared live pipeline)
@@ -127,20 +129,22 @@ Reuses **`core.apply_correction`**, **`core.apply_simulation`**, and **`Correcti
 | Piece | Role |
 |-------|------|
 | `camera_source.py` | `OpenCVWebcamSource`; `FakeFrameSource` (desktop/smoke); `AndroidCameraSource` (Camera4Kivy `Preview` + `analyze_pixels_callback` @ ~640 long side); `CameraSessionState`; runtime CAMERA permission |
-| `camera_pipeline.py` | BGR↔RGB, live downscale (~560), loupe median/zoom crop, `LabelSmoother`, `name_loupe_color` → `core.name_color` (always on **original** frame) |
-| `screens/camera.py` | Full-bleed `LivePreviewStage`; tiny invisible Preview host; mode / Strength / freeze / capture / loupe / flip; FPS+size debug line |
-| `screens/lens.py` | Redirects to Camera with loupe enabled (no duplicated pipeline) |
-| `screens/camera_widgets.py` | `LivePreviewStage`, `LoupeOverlay`, `CameraModeToolbar` |
+| `camera_pipeline.py` | BGR↔RGB, live downscale (**640** longest; try 480 if a device still stutters), loupe median/zoom crop, `LabelSmoother`, `name_loupe_color` → `core.name_color` (always on **original** frame, ~5 Hz) |
+| `camera_gpu.py` | Fragment-shader `mat3` (identity / correction / simulation) matching `core.engine._apply_matrix` gamma clamp; `mat3_uniform` column-major |
+| `screens/camera.py` | Full-bleed GPU `LivePreviewStage`; mode / Strength = matrix uniform only; freeze / capture / loupe / flip; timing+FPS debug line |
+| `screens/lens.py` | Placeholder only — **Lens is a Camera loupe state** via `RootShell._navigate("lens")` + `Clock.schedule_once` → `set_loupe_enabled` (never flips `sm.current` from `on_pre_enter`) |
+| `screens/camera_widgets.py` | `LivePreviewStage` (reused RGBA texture + `RenderContext` FS), `LoupeOverlay`, `CameraModeToolbar` |
+| `exception_guard.py` | Global Kivy `ExceptionHandler` → diagnostics log + “Something went wrong”; `ExceptionManager.PASS` |
 | `camerax_provider/` | Vendored CameraX Java + `gradle_options.py` (chained from `assets/android/p4a_hook.py`) |
 
-Frame loop: `connect_camera` on enter (after permission) → analyze pixels → latest-frame drop → bg thread (Original/Corrected/Simulation) → single texture blit. `disconnect_camera` on leave/pause. Capture → MediaStore `Pictures/ColorSight`. All camera events go to the diagnostics log.
+Frame loop: `connect_camera` on enter (after permission) → analyze pixels → latest-frame-wins (no queue) → downscale → **upload raw** into one reused RGBA texture → GPU `mat3` draw. Strength/mode only update the uniform. Loupe crops the CPU original when on; color name ~5 Hz. Capture still uses CPU `render_mode_rgb` once. Timing (`recv` / `upload` / `draw` ms + fps) every 5 s to the log. `disconnect_camera` on leave/pause.
 
 Helpers/widgets also: Photos `BeforeAfterViewer`, `PhotoModeToolbar`, `PreviewSeverityBar`, `TextLinkButton`, `LoadingShimmer`. Callbacks use `*_cb` names only.
 
 ## Profile + Settings
 
 - **Profile:** reload from disk on enter; pastel hero (plain-language type, severity label + N/100, measured date); optional `AxisBars` when `thresholds` stored; before/after swatch strip; Retake / Fine-tune (confirm before overwrite; Reset to test result) / Clear (confirm). Optional JSON fields on `CorrectionProfile` (`measured_at`, `label`, `thresholds`, `test_severity`) — UI metadata only.
-- **Settings:** About (version + screening note), Privacy (on-device only), Display tips, Debug FPS toggle (`_FpsToggle`, not Kivy `Switch`).
+- **Settings:** About (version + screening note), Privacy (on-device only), Display tips, Debug FPS toggle (`_FpsToggle`, not Kivy `Switch`), **Test photo picker**, View recent log.
 
 ## App shell
 

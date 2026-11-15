@@ -286,6 +286,10 @@ class SettingsScreen(Screen):
         view_log.bg_color = Colors.accent_dark
         view_log.on_press_cb = lambda *_: self._go("log_viewer")
         root.add_widget(view_log)
+        test_pick = PrimaryButton(text="Test photo picker")
+        test_pick.bg_color = Colors.accent_blue
+        test_pick.on_press_cb = lambda *_: self._test_photo_picker()
+        root.add_widget(test_pick)
         replay = PrimaryButton(text="Replay vision-test tutorial")
         replay.bg_color = Colors.accent_blue
         replay.on_press_cb = lambda *_: self._replay_tutorial()
@@ -296,6 +300,25 @@ class SettingsScreen(Screen):
 
     def apply_theme(self):
         self._build()
+
+    def _test_photo_picker(self):
+        import logging
+
+        from colorsight.photo_io import pick_image
+
+        log = logging.getLogger("colorsight")
+        log.info("debug: test photo picker tapped")
+
+        def _done(path):
+            if path:
+                log.info("debug: test photo picker result=ok")
+            else:
+                log.info("debug: test photo picker result=cancel_or_none")
+
+        def _err(msg):
+            log.warning("debug: test photo picker error=%s", msg)
+
+        pick_image(_done, on_error=_err)
 
     def _replay_tutorial(self):
         from colorsight.prefs import request_tutorial_replay

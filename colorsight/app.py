@@ -12,6 +12,7 @@ from kivy.metrics import dp
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.screenmanager import FadeTransition, ScreenManager
 
+from colorsight.exception_guard import install_exception_handler
 from colorsight.logging_setup import setup_logging
 from colorsight.prefs import get_theme_pref, is_first_run
 from colorsight.safe_area import refresh_safe_insets
@@ -118,11 +119,46 @@ class RootShell(FloatLayout):
             self.nav.active = nav_key
 
     def _navigate(self, key: str):
+        # Lens is a Camera state (loupe), not a separate live pipeline
+        if key == "lens":
+            self._navigate_lens()
+            return
+        if key == "camera":
+            # Explicit Camera nav clears loupe so the Camera item stays highlighted
+            try:
+                cam = self.sm.get_screen("camera")
+                if getattr(cam, "_loupe_on", False) and hasattr(cam, "set_loupe_enabled"):
+                    cam.set_loupe_enabled(False)
+            except Exception:
+                log.exception("camera nav: clear loupe failed")
         if key in self.sm.screen_names:
             self.sm.transition.direction = "left"
             self.sm.current = key
 
+    def _navigate_lens(self):
+        """Switch to Camera normally, then enable loupe after the screen is shown."""
+        try:
+            self.sm.transition.direction = "left"
+            if self.sm.current != "camera":
+                self.sm.current = "camera"
+            self.nav.active = "lens"
+            Clock.schedule_once(self._enable_lens_loupe, 0)
+        except Exception:
+            log.exception("navigate lens failed")
+
+    def _enable_lens_loupe(self, *_a):
+        try:
+            cam = self.sm.get_screen("camera")
+            if hasattr(cam, "set_loupe_enabled"):
+                cam.set_loupe_enabled(True)
+            self.nav.active = "lens"
+        except Exception:
+            log.exception("enable lens loupe failed")
+
     def set_nav_active(self, screen_name: str):
+        if screen_name == "lens":
+            self._navigate_lens()
+            return
         if screen_name in self.sm.screen_names:
             self.sm.current = screen_name
 
@@ -162,6 +198,7 @@ class ColorSightApp(App):
     def build(self):
         register_fonts()
         setup_logging()
+        install_exception_handler()
         refresh_safe_insets()
         theme = get_theme()
         # Tokens only — UI does not exist yet

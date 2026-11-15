@@ -366,6 +366,8 @@ class PhotosScreen(Screen):
     # --- pick / process --------------------------------------------------
 
     def _pick(self):
+        log.info("photos: choose tapped (UI)")
+        self._set_status("Opening gallery…")
         pick_image(self._on_picked, on_error=self._on_pick_error)
 
     def _on_pick_error(self, msg: str):

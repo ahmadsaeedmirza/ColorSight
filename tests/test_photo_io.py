@@ -100,6 +100,55 @@ class TestPickImageErrorPaths(unittest.TestCase):
         self.assertEqual(picked, [None])
 
 
+class TestAndroidStorage4KivyFallback(unittest.TestCase):
+    def test_pick_android_falls_back_when_storage4kivy_missing(self):
+        from colorsight import photo_io
+
+        legacy = mock.Mock()
+        with mock.patch.object(photo_io, "ensure_read_images_permission"):
+            with mock.patch.object(
+                photo_io,
+                "_pick_android_storage4kivy",
+                return_value=False,
+            ):
+                with mock.patch.object(photo_io, "_pick_android_legacy", legacy):
+                    photo_io._pick_android(lambda p: None, on_error=None)
+        legacy.assert_called_once()
+
+    def test_storage4kivy_chooser_callback_copies_shared(self):
+        from colorsight import photo_io
+
+        picked: list = []
+        fake_chooser = mock.Mock()
+        fake_ss = mock.Mock()
+        fake_ss.copy_from_shared.return_value = "/cache/ColorSightPick/x.jpg"
+
+        class _FakeChooser:
+            def __init__(self, cb):
+                self._cb = cb
+
+            def choose_content(self, mime):
+                self._cb(["content://fake/1"])
+
+        with mock.patch.object(photo_io, "ensure_read_images_permission"):
+            with mock.patch.dict(
+                "sys.modules",
+                {
+                    "androidstorage4kivy": mock.Mock(
+                        Chooser=_FakeChooser,
+                        SharedStorage=lambda: fake_ss,
+                    )
+                },
+            ):
+                # Force re-import path inside the function
+                ok = photo_io._pick_android_storage4kivy(
+                    lambda p: picked.append(p), on_error=None
+                )
+        self.assertTrue(ok)
+        self.assertEqual(picked, ["/cache/ColorSightPick/x.jpg"])
+        fake_ss.copy_from_shared.assert_called_once()
+
+
 class TestSaveShareMessages(unittest.TestCase):
     def test_desktop_save_friendly_label(self):
         rgb = np.zeros((8, 8, 3), dtype=np.uint8)

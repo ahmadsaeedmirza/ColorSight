@@ -103,11 +103,17 @@ class HomeScreen(Screen):
 
     def _open(self, screen_name):
         def _handler(_card=None):
-            if self.manager:
-                self.manager.transition.direction = "left"
-                self.manager.current = screen_name
-                if hasattr(self.manager.parent, "set_nav_active"):
-                    self.manager.parent.set_nav_active(screen_name)
+            if not self.manager:
+                return
+            parent = self.manager.parent
+            # Lens is a Camera loupe state — go through RootShell navigation
+            if screen_name == "lens" and hasattr(parent, "_navigate"):
+                parent._navigate("lens")
+                return
+            self.manager.transition.direction = "left"
+            self.manager.current = screen_name
+            if hasattr(parent, "set_nav_active"):
+                parent.set_nav_active(screen_name)
 
         return _handler
 
@@ -125,7 +131,11 @@ class HomeScreen(Screen):
         self._rebuild_grid()
         target = mapping.get(selected)
         if target and selected != "All" and self.manager:
-            self.manager.current = target
+            parent = self.manager.parent
+            if target == "lens" and hasattr(parent, "_navigate"):
+                parent._navigate("lens")
+            else:
+                self.manager.current = target
 
     def _build(self):
         self.clear_widgets()

@@ -4,6 +4,20 @@ Newest entries first. Append after every prompt per `rules.md`.
 
 ---
 
+## 2026-11-15 — Android runtime: picker, Lens crash, GPU camera
+
+**Prompt:** Three real-phone fixes — Photos picker no-op; Lens nav crash; smooth camera via GPU. No `/core` / staircase / scoring / existing-test edits. Build safety: unpinned reqs + add pure-Python `androidstorage4kivy` only; no PIP_CONSTRAINT/api/ndk/archs changes; no CRLF in .sh/.spec/.yml/.py.
+
+**Photos:** Immediate “Opening gallery…” + `photos:` diagnostics on every step. Prefer `androidstorage4kivy` Chooser + `SharedStorage.copy_from_shared`; legacy pyjnius picker automatic fallback. Save prefers `copy_to_shared` (Pictures / ColorSight) then MediaStore. Settings → Debug → **Test photo picker**.
+
+**Lens:** Not a mid-transition redirect. `RootShell._navigate("lens")` → Camera + `Clock.schedule_once` → `set_loupe_enabled`; Lens nav highlighted while loupe on. Global `ExceptionHandler` logs + “Something went wrong” + `PASS`. Regression: `tests/test_lens_nav.py`.
+
+**Camera GPU:** `camera_gpu.py` + `LivePreviewStage` RenderContext FS `mat3` (identity/correction/simulation ≡ `core._apply_matrix`). One reused RGBA texture; latest-frame-wins; Strength = uniform only; loupe zoom from CPU original, name ~5 Hz; timing r/u/d + fps every 5 s. Unit: `tests/test_camera_gpu.py` (≤1/255 vs core).
+
+**Packaging / docs:** `androidstorage4kivy` in `buildozer.spec`; architecture/production/rules + this entry.
+
+---
+
 ## 2026-11-15 — Theme rebuild, safe insets, chip scroll, test tutorial
 
 **Prompt:** Real-phone UI: theme not applying fully; status-bar overlap (api 35); Home chips start scrolled; skippable Vision Test tutorial. No `/core` / staircase / scoring / existing-test changes.

@@ -2,17 +2,23 @@
 
 from __future__ import annotations
 
+import logging
+import time
+
 import numpy as np
 from kivy.graphics import (
     Color,
     Ellipse,
     Line,
+    Rectangle,
+    RenderContext,
     RoundedRectangle,
     StencilPop,
     StencilPush,
     StencilUnUse,
     StencilUse,
 )
+from kivy.graphics.texture import Texture
 from kivy.metrics import dp
 from kivy.properties import BooleanProperty, NumericProperty, ObjectProperty, StringProperty
 from kivy.uix.behaviors import ButtonBehavior
@@ -22,47 +28,121 @@ from kivy.uix.label import Label
 from kivy.uix.widget import Widget
 from kivy.uix.image import Image as KivyImage
 
+from colorsight.camera_gpu import PREVIEW_FS, identity_matrix, mat3_uniform
 from colorsight.camera_pipeline import DEFAULT_ZOOM, LOUPE_DIAMETER_DP
 from colorsight.screens.photo_widgets import _invoke, rgb_to_texture
 from colorsight.theme.geometry import clamped_radii
 from colorsight.theme.tokens import Colors, Fonts, Icons, NEUTRAL_SURFACE, Radii
 from colorsight.widgets import Icon
 
+log = logging.getLogger("colorsight")
+
 
 class LivePreviewStage(FloatLayout):
-    """Full-bleed RGB texture preview (letterboxed, no distortion)."""
+    """Full-bleed preview: raw frame upload + GPU 3×3 color matrix (letterboxed)."""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._tex = None
-        self._rgb = None
-        # Accuracy surface: always neutral light behind the frame
+        self._tex: Texture | None = None
+        self._rgb: np.ndarray | None = None
+        self._rgba_buf: np.ndarray | None = None
+        self._matrix = identity_matrix()
+        self._upload_ms = 0.0
+        self._draw_ms = 0.0
+        # Accuracy surface behind the frame
         with self.canvas.before:
             self._bg_c = Color(*NEUTRAL_SURFACE)
             self._bg_r = RoundedRectangle(pos=self.pos, size=self.size, radius=[0])
-        self._img = KivyImage(fit_mode="contain", size_hint=(1, 1))
-        self.add_widget(self._img)
+        # Custom FS on a child RenderContext so parent projection still applies
+        self._rc = RenderContext(
+            use_parent_projection=True,
+            use_parent_modelview=True,
+            use_parent_frag_modelview=True,
+        )
+        try:
+            self._rc.shader.fs = PREVIEW_FS
+        except Exception:
+            log.exception("camera_gpu: shader compile failed — identity preview only")
+        self._rc["u_color_mat"] = mat3_uniform(self._matrix)
+        with self._rc:
+            self._tex_color = Color(1, 1, 1, 1)
+            self._rect = Rectangle(pos=self.pos, size=self.size)
+        self.canvas.add(self._rc)
         self.bind(pos=self._layout, size=self._layout)
 
-    def set_rgb(self, rgb: np.ndarray | None):
+    def set_color_matrix(self, matrix: np.ndarray) -> None:
+        """Update the fragment-shader mat3 (instant — no frame reprocess)."""
+        self._matrix = np.asarray(matrix, dtype=np.float64).reshape(3, 3)
+        try:
+            self._rc["u_color_mat"] = mat3_uniform(self._matrix)
+        except Exception:
+            log.exception("camera_gpu: set_color_matrix failed")
+
+    def set_rgb(self, rgb: np.ndarray | None) -> None:
+        """Upload raw HxWx3 (or HxWx4) uint8; GPU applies the current matrix."""
         if rgb is None:
             return
-        self._rgb = rgb
-        self._tex = rgb_to_texture(rgb, existing=self._tex)
-        self._img.texture = self._tex
+        t0 = time.perf_counter()
+        arr = np.asarray(rgb)
+        if arr.ndim != 3 or arr.shape[2] < 3:
+            return
+        h, w = int(arr.shape[0]), int(arr.shape[1])
+        if arr.shape[2] == 4 and arr.dtype == np.uint8 and arr.flags["C_CONTIGUOUS"]:
+            rgba = arr
+            self._rgb = arr[..., :3]
+        else:
+            rgb3 = np.ascontiguousarray(arr[..., :3], dtype=np.uint8)
+            self._rgb = rgb3
+            if (
+                self._rgba_buf is None
+                or self._rgba_buf.shape[0] != h
+                or self._rgba_buf.shape[1] != w
+            ):
+                self._rgba_buf = np.empty((h, w, 4), dtype=np.uint8)
+                self._rgba_buf[..., 3] = 255
+            self._rgba_buf[..., :3] = rgb3
+            rgba = self._rgba_buf
+
+        if self._tex is None or tuple(self._tex.size) != (w, h):
+            self._tex = Texture.create(size=(w, h), colorfmt="rgba")
+            self._tex.mag_filter = "linear"
+            self._tex.min_filter = "linear"
+            self._tex.flip_vertical()
+        # Latest-frame blit into the reused texture (no new Texture per frame).
+        # Kivy blit_buffer requires a 1-D buffer view (not HxWx4).
+        src = rgba if rgba.flags["C_CONTIGUOUS"] else np.ascontiguousarray(rgba)
+        flat = src.reshape(-1)
+        self._tex.blit_buffer(memoryview(flat), colorfmt="rgba", bufferfmt="ubyte")
+        self._rect.texture = self._tex
         self._layout()
+        self._upload_ms = (time.perf_counter() - t0) * 1000.0
 
     def current_rgb(self) -> np.ndarray | None:
         return self._rgb
 
+    def last_upload_ms(self) -> float:
+        return float(self._upload_ms)
+
     def _layout(self, *_a):
         self._bg_r.pos = self.pos
         self._bg_r.size = self.size
-        self._img.pos = self.pos
-        self._img.size = self.size
+        rgb = self._rgb
+        if rgb is None:
+            self._rect.pos = self.pos
+            self._rect.size = self.size
+            return
+        th, tw = rgb.shape[0], rgb.shape[1]
+        if tw <= 0 or th <= 0 or self.width <= 0 or self.height <= 0:
+            return
+        scale = min(self.width / tw, self.height / th)
+        bw, bh = tw * scale, th * scale
+        ox = self.x + (self.width - bw) / 2
+        oy = self.y + (self.height - bh) / 2
+        self._rect.pos = (ox, oy)
+        self._rect.size = (bw, bh)
 
     def image_to_pixel(self, x: float, y: float) -> tuple[float, float] | None:
-        if self._rgb is None or self._img.texture is None:
+        if self._rgb is None:
             return None
         th, tw = self._rgb.shape[0], self._rgb.shape[1]
         if tw <= 0 or th <= 0 or self.width <= 0 or self.height <= 0:

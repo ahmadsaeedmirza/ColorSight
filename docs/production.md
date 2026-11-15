@@ -91,27 +91,30 @@ python main.py   # open Camera; Settings → Show camera FPS
 |-------|--------|
 | Desktop | OpenCV `VideoCapture(0)`; if open fails → synthetic **Test pattern** (labeled) only |
 | Android | Camera4Kivy + `camerax_provider` CameraX; runtime `CAMERA`; denied / no camera / start fail → error card with **Retry** + **Open settings** (never silent fake) |
-| Pipeline | Analyze ~640 long side → latest-frame drop; live longest ≈ **560 px**; bg process + blit; `connect_camera` on enter / `disconnect_camera` on leave/pause; flip via `select_camera` |
-| Capture | Current mode → MediaStore album **ColorSight** — no paths in UI |
-| Lens | Nav opens Camera with loupe on; `name_color` on original frame |
-| Packaging | `p4a.hook` = `assets/android/p4a_hook.py` (CameraX gradle + FileProvider); `gestures4kivy` in requirements |
+| Pipeline | Analyze ~640 long side → latest-frame-wins; live longest **640**; **GPU `mat3`** on reused RGBA texture (no per-frame NumPy color); Strength/mode = uniform only; loupe name ~5 Hz; `connect_camera` / `disconnect_camera` on enter/leave/pause |
+| Capture | Current mode → SharedStorage/MediaStore album **ColorSight** — no paths in UI |
+| Lens | Nav → Camera + loupe via `Clock.schedule_once` (not mid-transition `sm.current`); Lens nav highlighted while loupe on |
+| Packaging | `p4a.hook` = `assets/android/p4a_hook.py`; requirements include `camera4kivy,gestures4kivy,androidstorage4kivy` (pure-Python) |
 
-#### Measured FPS
+#### Measured FPS / timing
 
-| Setup | Approx. processed FPS |
-|-------|------------------------|
-| FakeFrameSource @ 20 Hz, Corrected mode, 390×844 window (Intel UHD 620) | **~15–20** (poll 20 Hz; drops if still processing) |
-| Mid-range phone (on-device) | _Record after install: Settings → Show camera FPS → note `N fps · W×H` here_ |
+Target: **≥24 fps**, **&lt;16 ms** Python work/frame on a mid-range phone. Debug line shows `fps · r/u/d ms` (receive / upload / draw); log writes averages every 5 s (`camera_timing …`).
 
-Enable **Settings → Show camera FPS** on device to see real fps + analysis frame size. Heavy Simulation + loupe on low-end devices may dip below 15 fps — drop frames rather than queue.
+| Setup | Approx. FPS | Notes |
+|-------|-------------|--------|
+| FakeFrameSource, Corrected, 390×844 (desktop smoke) | **~24–30** | GPU path; poll 30 Hz; latest-frame-wins |
+| Mid-range phone (on-device) | _Fill after install: Settings → Show camera FPS → note `N fps · r…/u…/d… ms` here_ | Aim ≥24 fps, python_ms &lt;16 |
+
+Enable **Settings → Show camera FPS** on device. If a phone still stutters, drop `LIVE_LONGEST` to **480** and re-measure.
 
 ### Camera / Lens device checklist
 
 1. Uninstall old APK, install fresh build; open Camera (and Lens from nav).
 2. Grant CAMERA when prompted — live preview (not color bars). Deny once → card “Camera permission denied” → Open settings / Retry.
 3. Flip camera (front mirrored, back upright). Freeze / Capture → “Saved to your gallery” → Gallery album **ColorSight**.
-4. Lens: loupe names colors from the **original** frame; Corrected mode still shows correction on the stage.
-5. Background the app → resume → preview restarts. If anything fails: **Settings → Debug → View recent log** (`camera_event …` lines).
+4. Lens: nav stays on Camera with loupe; names colors from the **original** frame (~5 Hz); Corrected still via GPU matrix on the stage. Home → Lens → Camera → Lens → Back must not crash.
+5. Photos: **Choose a photo** shows “Opening gallery…”; Settings → Debug → **Test photo picker** logs result. Save → “Saved to your gallery”.
+6. Background the app → resume → preview restarts. If anything fails: **Settings → Debug → View recent log** (`photos:` / `camera_event` / `camera_timing` / `uncaught exception` lines).
 
 ## Cloud build (GitHub Actions) — preferred
 
