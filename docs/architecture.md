@@ -152,6 +152,21 @@ Helpers/widgets also: Photos `BeforeAfterViewer`, `PhotoModeToolbar`, `PreviewSe
 - Android/Escape back → Home from feature screens (`RootShell.go_back`).
 - Home: chips filter + navigate; avatar → Profile; menu → Settings; search bar removed.
 
+### Startup stages (crash-proof)
+
+`ColorSightApp.build()` breadcrumbs (flushed) in order: logging → exception handler → fonts → safe_area → prefs/theme → profile → RootShell/screens/nav → first-frame layout probe → 3 s watchdog.
+
+| Stage | On failure |
+|-------|------------|
+| Fonts | If TTF files missing / register fails → **Roboto** names (never leave Labels pointing at unregistered Lexend* — that blanks every screen) |
+| safe_area / pyjnius | Defaults top **28 dp**, bottom **16 dp**; clamps top 0–80, bottom 0–48 |
+| Theme / night mode / bad pref | **Light** |
+| Camera GPU shader | Lazy compile on Camera enter; CPU `core` matrix path + status notice |
+| androidstorage4kivy / Camera4Kivy | Lazy import inside the call site |
+| Any `build()` / `rebuild_ui()` exception | Plain **fallback error screen** (white/black, stock widgets): “ColorSight could not start”, exception + last 15 log lines, **Copy details** / **Reset app data** (prefs/theme only) / **Try again** |
+
+`exception_guard` still returns `PASS` for non-fatal errors, shows a status line, counts faults in the first 5 s, and switches to the fallback if the root is empty / zero-size / invisible after 3 s.
+
 ## UI notes
 
 - Test flow: **checklist → Trivector trials → hue → results**.

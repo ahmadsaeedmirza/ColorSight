@@ -4,6 +4,14 @@ Newest entries first. Append after every prompt per `rules.md`.
 
 ---
 
+## 2026-11-16 — Android startup crash-proof + blank UI diagnosis
+
+**Prompt:** APK showed splash then only themed background (no screens). ExceptionHandler PASS hid errors. No `/core` / staircase / scoring / assertion changes. Build safety unchanged.
+
+**Impl:** Startup breadcrumbs (flushed); `build`/`rebuild_ui` try/except → plain fallback screen (Copy / Reset prefs / Try again); exception guard counts early faults + 3 s layout watchdog; safe_area clamps + pyjnius try/except (defaults 28/16); theme → Light on failure; GPU shader lazy on Camera enter with CPU fallback; RootShell fills window (`size_hint` + SM sync). **Root cause of blank themed background:** unregistered Lexend* font names → every Label raises `File … not found` → all screens fail → only RootShell bg. Fix: verify TTF files, fall back to Roboto names; empty SM raises into fallback UI. Tests: `tests/test_startup_resilience.py`. Docs updated.
+
+---
+
 ## 2026-11-16 — Preflight unit tests need opencv-headless
 
 **Prompt:** After xvfb fix, unit-test step still exited 1 (truncated log showed only FileProvider lines). Cause: preflight pip installed kivy/numpy/pillow but **not OpenCV** — `core` tests import `cv2`. No app logic changes.

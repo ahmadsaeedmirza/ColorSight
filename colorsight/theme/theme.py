@@ -22,31 +22,42 @@ _ICONS_DIR = _ROOT / "assets" / "icons"
 _registered = False
 
 
+def _use_default_font_names() -> None:
+    """Point Fonts.* at Kivy's built-in Roboto so Labels never look for missing TTF files."""
+    Fonts.regular = "Roboto"
+    Fonts.medium = "Roboto"
+    Fonts.semibold = "Roboto"
+    Fonts.bold = "Roboto"
+    # Icons will show as tofu without MaterialIcons — better than a blank app
+    Fonts.icons = "Roboto"
+
+
 def register_fonts() -> None:
     global _registered
     if _registered:
         return
-    LabelBase.register(
-        name=Fonts.regular,
-        fn_regular=str(_FONTS_DIR / "Lexend-Regular.ttf"),
+    files = (
+        (_FONTS_DIR / "Lexend-Regular.ttf", Fonts.regular),
+        (_FONTS_DIR / "Lexend-Medium.ttf", Fonts.medium),
+        (_FONTS_DIR / "Lexend-SemiBold.ttf", Fonts.semibold),
+        (_FONTS_DIR / "Lexend-Bold.ttf", Fonts.bold),
+        (_ICONS_DIR / "MaterialIcons-Regular.ttf", Fonts.icons),
     )
-    LabelBase.register(
-        name=Fonts.medium,
-        fn_regular=str(_FONTS_DIR / "Lexend-Medium.ttf"),
-    )
-    LabelBase.register(
-        name=Fonts.semibold,
-        fn_regular=str(_FONTS_DIR / "Lexend-SemiBold.ttf"),
-    )
-    LabelBase.register(
-        name=Fonts.bold,
-        fn_regular=str(_FONTS_DIR / "Lexend-Bold.ttf"),
-    )
-    LabelBase.register(
-        name=Fonts.icons,
-        fn_regular=str(_ICONS_DIR / "MaterialIcons-Regular.ttf"),
-    )
-    _registered = True
+    missing = [str(p) for p, _ in files if not p.is_file()]
+    if missing:
+        log.warning("font files missing — using Roboto defaults: %s", missing)
+        _use_default_font_names()
+        _registered = True
+        return
+    try:
+        for path, name in files:
+            LabelBase.register(name=name, fn_regular=str(path))
+        _registered = True
+        log.info("fonts registered Lexend + MaterialIcons")
+    except Exception as exc:
+        log.warning("font registration failed (using Roboto defaults): %s", exc)
+        _use_default_font_names()
+        _registered = True  # do not retry forever
 
 
 def font_name(weight: str = "regular") -> str:
@@ -60,7 +71,7 @@ def font_name(weight: str = "regular") -> str:
 
 
 def system_prefers_dark() -> bool:
-    """Android: Configuration.uiMode & UI_MODE_NIGHT_MASK. Desktop: False (Light)."""
+    """Android: Configuration.uiMode & UI_MODE_NIGHT_MASK. Desktop / failure: False (Light)."""
     if platform != "android":
         return False
     try:
@@ -69,11 +80,13 @@ def system_prefers_dark() -> bool:
         PythonActivity = autoclass("org.kivy.android.PythonActivity")
         Configuration = autoclass("android.content.res.Configuration")
         activity = PythonActivity.mActivity
+        if activity is None:
+            return False
         ui_mode = activity.getResources().getConfiguration().uiMode
         night = ui_mode & Configuration.UI_MODE_NIGHT_MASK
         return night == Configuration.UI_MODE_NIGHT_YES
     except Exception as exc:
-        log.warning("system dark-mode probe failed: %s", exc)
+        log.warning("system dark-mode probe failed (Light fallback): %s", exc)
         return False
 
 
@@ -101,19 +114,39 @@ class ThemeController(EventDispatcher):
         self.apply(rebuild=True, return_to=return_to)
 
     def apply(self, *, rebuild: bool = True, return_to: str | None = None):
-        if self.preference == "dark":
-            resolved = "dark"
-        elif self.preference == "light":
-            resolved = "light"
-        else:
-            resolved = "dark" if system_prefers_dark() else "light"
-        apply_color_set(resolved)
-        self.resolved = resolved
-        from colorsight.theme.tokens import Colors
+        try:
+            pref = (self.preference or "light").lower()
+            if pref not in ("system", "light", "dark"):
+                pref = "light"
+                self.preference = "light"
+            if pref == "dark":
+                resolved = "dark"
+            elif pref == "light":
+                resolved = "light"
+            else:
+                try:
+                    resolved = "dark" if system_prefers_dark() else "light"
+                except Exception:
+                    resolved = "light"
+            apply_color_set(resolved)
+            self.resolved = resolved
+            from colorsight.theme.tokens import Colors
 
-        Window.clearcolor = Colors.bg
-        self.revision += 1
-        log.info("theme applied preference=%s resolved=%s", self.preference, resolved)
+            Window.clearcolor = Colors.bg
+            self.revision += 1
+            log.info("theme applied preference=%s resolved=%s", self.preference, resolved)
+        except Exception as exc:
+            log.warning("theme apply failed — forcing Light: %s", exc)
+            try:
+                apply_color_set("light")
+                self.resolved = "light"
+                self.preference = "light"
+                from colorsight.theme.tokens import Colors
+
+                Window.clearcolor = Colors.bg
+            except Exception:
+                pass
+            return
 
         app = App.get_running_app()
         if rebuild and app is not None and hasattr(app, "rebuild_ui"):
@@ -121,7 +154,6 @@ class ThemeController(EventDispatcher):
             app.rebuild_ui(return_to=return_to)
         elif app is not None and getattr(app, "root", None) is not None:
             _refresh_tree(app.root)
-
 
 _controller: ThemeController | None = None
 

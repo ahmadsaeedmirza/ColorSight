@@ -32,6 +32,7 @@
 | CI `constraints.txt` + `PIP_CONSTRAINT` for charset-normalizer | Done |
 | Android full-screen layout (no desktop Window.size) + API 35 + phone sim | Done |
 | Dark theme + chip/camera polish + on-device diagnostics | Done |
+| **Startup crash-proof** — breadcrumbs, fallback error screen, safe_area/theme/GPU degrade, layout watchdog | Done |
 
 Stack: NumPy + OpenCV in `core/`, Kivy UI in `colorsight/`, Buildozer packaging.
 

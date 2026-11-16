@@ -1,5 +1,14 @@
 # Production — Build & device testing
 
+## If you see “ColorSight could not start”
+
+The app hit a fatal startup error and showed the plain fallback screen (white background, black text).
+
+1. Tap **Copy details**.
+2. Paste into a message / issue (includes exception type + last log lines).
+3. Optional: **Reset app data** clears prefs/theme only (keeps your vision-test profile), then **Try again**.
+4. Startup breadcrumbs in Settings → Debug → View recent log look like `startup:stage +Nms total=…`.
+
 ## Before you push (Android / cloud build)
 
 Run these **before** pushing to `build-apk` or triggering **Android APK**:

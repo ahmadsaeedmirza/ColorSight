@@ -44,8 +44,13 @@ def mark_onboarding_done() -> None:
 
 
 def get_theme_pref() -> str:
-    pref = str(load_prefs().get("theme", "system")).lower()
-    return pref if pref in ("system", "light", "dark") else "system"
+    try:
+        pref = str(load_prefs().get("theme", "system")).lower()
+    except Exception:
+        return "light"
+    if pref in ("system", "light", "dark"):
+        return pref
+    return "light"  # invalid saved value → Light (safe default)
 
 
 def set_theme_pref(pref: str) -> None:
