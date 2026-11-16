@@ -187,8 +187,24 @@ class LogViewerScreen(Screen):
         scroll.add_widget(self._body)
         root.add_widget(scroll)
         self._copy_btn = PrimaryButton(text="Copy to clipboard")
-        self._copy_btn.on_press_cb = lambda *_: self._copy()
+        self._copy_btn.on_press_cb = self._copy
         root.add_widget(self._copy_btn)
+        self._copy_status = Label(
+            text="",
+            font_name=Fonts.medium,
+            font_size=dp(13),
+            color=Colors.accent_blue,
+            size_hint_y=None,
+            height=dp(22),
+            halign="center",
+            valign="middle",
+        )
+        self._copy_status.bind(
+            size=lambda *_: setattr(
+                self._copy_status, "text_size", self._copy_status.size
+            )
+        )
+        root.add_widget(self._copy_status)
         self.add_widget(root)
 
     def on_pre_enter(self, *_a):
@@ -196,15 +212,29 @@ class LogViewerScreen(Screen):
         self._body.color = Colors.text
         if hasattr(self, "_copy_btn"):
             self._copy_btn.text = "Copy to clipboard"
+        if hasattr(self, "_copy_status"):
+            self._copy_status.text = ""
 
-    def _copy(self):
-        ok = copy_text(self._body.text or "")
+    def _copy(self, *_a):
+        text = self._body.text or ""
+        ok = copy_text(text)
         self._copy_btn.text = "Copied" if ok else "Copy failed"
-        Clock.schedule_once(self._reset_copy_label, 1.6)
+        self._copy_status.text = (
+            "Log copied — paste anywhere"
+            if ok
+            else "Copy failed — see log for details"
+        )
+        self._copy_status.color = (
+            Colors.accent_blue if ok else (0.85, 0.25, 0.25, 1)
+        )
+        Clock.unschedule(self._reset_copy_label)
+        Clock.schedule_once(self._reset_copy_label, 2.0)
 
     def _reset_copy_label(self, *_a):
         if hasattr(self, "_copy_btn"):
             self._copy_btn.text = "Copy to clipboard"
+        if hasattr(self, "_copy_status"):
+            self._copy_status.text = ""
 
     def _go(self, name: str):
         if self.manager:

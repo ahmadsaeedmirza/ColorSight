@@ -4,6 +4,16 @@ Newest entries first. Append after every prompt per `rules.md`.
 
 ---
 
+## 2026-11-17 — Camera black despite uploads + clipboard no-op
+
+**Prompt:** Still black on phone and laptop (webcam LED on); copy does nothing. Suspect no real change.
+
+**Root cause (laptop proof):** `upload_ms` / timing logs showed frames were arriving — nested `RenderContext` FS blit painted **black** while Photos’ `rgb_to_texture` works. Clipboard: Kivy/SDL often silent no-op on Windows; Android needs UI-thread `ClipData`.
+
+**Fix:** `LivePreviewStage` uses CPU `apply_matrix_shader_emulation` + `rgb_to_texture` (same matrix math as core; no broken GPU FBO). `clipboard_util`: Win32 CF_UNICODETEXT → Kivy → tkinter; Android ClipData + wait; status line under Copy button. No `/core` changes. No commit.
+
+---
+
 ## 2026-11-17 — Camera/Lens black feed + log Copy broken
 
 **Prompt:** Camera + Lens still black (“Starting camera…”); Recent log Copy to clipboard does nothing.

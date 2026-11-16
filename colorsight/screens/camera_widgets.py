@@ -11,7 +11,6 @@ from kivy.graphics import (
     Ellipse,
     Line,
     Rectangle,
-    RenderContext,
     RoundedRectangle,
     StencilPop,
     StencilPush,
@@ -28,7 +27,7 @@ from kivy.uix.label import Label
 from kivy.uix.widget import Widget
 from kivy.uix.image import Image as KivyImage
 
-from colorsight.camera_gpu import PREVIEW_FS, identity_matrix, mat3_uniform
+from colorsight.camera_gpu import identity_matrix
 from colorsight.camera_pipeline import DEFAULT_ZOOM, LOUPE_DIAMETER_DP
 from colorsight.screens.photo_widgets import _invoke, rgb_to_texture
 from colorsight.theme.geometry import clamped_radii
@@ -39,87 +38,49 @@ log = logging.getLogger("colorsight")
 
 
 class LivePreviewStage(FloatLayout):
-    """Full-bleed preview: raw frame upload + GPU 3×3 color matrix (letterboxed).
+    """Full-bleed preview: letterboxed RGB texture + color matrix (≡ core).
 
-    Shader compiles lazily on first Camera draw — never at app import/start.
-    On GPU failure, falls back to CPU ``core`` matrix apply + RGB texture.
+    Uses the same ``rgb_to_texture`` path as Photos (proven on desktop/Android).
+    The previous nested ``RenderContext`` FS path uploaded frames but drew black
+    on common GL drivers — matrix is applied on CPU via
+    ``apply_matrix_shader_emulation`` (same math as ``core._apply_matrix``).
     """
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._tex: Texture | None = None
         self._rgb: np.ndarray | None = None
-        self._rgba_buf: np.ndarray | None = None
         self._matrix = identity_matrix()
         self._upload_ms = 0.0
         self._draw_ms = 0.0
+        # Kept for CameraScreen status probes (GPU path retired for reliability)
         self._gpu_ready = False
         self._gpu_failed = False
-        self._cpu_fallback = False
+        self._cpu_fallback = True
         self._rc = None
         self._rect = None
-        # Accuracy surface behind the frame
         with self.canvas.before:
             self._bg_c = Color(*NEUTRAL_SURFACE)
             self._bg_r = RoundedRectangle(pos=self.pos, size=self.size, radius=[0])
-        # Placeholder rect until GPU (or CPU path) attaches a texture
         with self.canvas:
-            self._tex_color = Color(1, 1, 1, 1)
+            Color(1, 1, 1, 1)
             self._rect = Rectangle(pos=self.pos, size=self.size)
         self.bind(pos=self._layout, size=self._layout)
 
     def ensure_gpu(self) -> bool:
-        """Compile the fragment shader on first Camera use. Returns True if GPU path OK."""
-        if self._gpu_ready:
-            return True
-        if self._gpu_failed or self._cpu_fallback:
-            return False
-        try:
-            rc = RenderContext(
-                use_parent_projection=True,
-                use_parent_modelview=True,
-                use_parent_frag_modelview=True,
-            )
-            rc.shader.fs = PREVIEW_FS
-            rc["u_color_mat"] = mat3_uniform(self._matrix)
-            with rc:
-                Color(1, 1, 1, 1)
-                rect = Rectangle(
-                    pos=self._rect.pos if self._rect else self.pos,
-                    size=self._rect.size if self._rect else self.size,
-                    texture=self._rect.texture if self._rect else None,
-                )
-            try:
-                if self._rect is not None:
-                    self.canvas.remove(self._rect)
-            except Exception:
-                pass
-            self.canvas.add(rc)
-            self._rc = rc
-            self._rect = rect
-            self._gpu_ready = True
-            log.info("camera_gpu: shader compiled (lazy)")
-            return True
-        except Exception:
-            log.exception("camera_gpu: lazy shader compile failed — CPU fallback")
-            self._gpu_failed = True
-            self._cpu_fallback = True
-            return False
+        """GPU FS path disabled — always use CPU matrix + RGB texture (visible)."""
+        self._cpu_fallback = True
+        self._gpu_ready = False
+        return False
 
     def set_color_matrix(self, matrix: np.ndarray) -> None:
-        """Update the fragment-shader mat3 (instant — no frame reprocess)."""
+        """Update the 3×3 color matrix; re-blit current frame if present."""
         self._matrix = np.asarray(matrix, dtype=np.float64).reshape(3, 3)
-        if self._gpu_ready and self._rc is not None:
-            try:
-                self._rc["u_color_mat"] = mat3_uniform(self._matrix)
-            except Exception:
-                log.exception("camera_gpu: set_color_matrix failed — switching to CPU")
-                self._gpu_failed = True
-                self._cpu_fallback = True
-                self._gpu_ready = False
+        if self._rgb is not None:
+            self.set_rgb(self._rgb)
 
     def set_rgb(self, rgb: np.ndarray | None) -> None:
-        """Upload frame; GPU mat3 when ready, else CPU apply_matrix + RGB blit."""
+        """Apply color matrix (≡ core) and blit via Photos-proven RGB texture."""
         if rgb is None:
             return
         t0 = time.perf_counter()
@@ -129,59 +90,28 @@ class LivePreviewStage(FloatLayout):
         rgb3 = np.ascontiguousarray(arr[..., :3], dtype=np.uint8)
         self._rgb = rgb3
 
-        use_gpu = self.ensure_gpu() and not self._cpu_fallback
-        display = rgb3
-        if not use_gpu:
-            # CPU path: apply matrix like core._apply_matrix (gamma clamp)
-            try:
-                from colorsight.camera_gpu import apply_matrix_shader_emulation
+        try:
+            from colorsight.camera_gpu import apply_matrix_shader_emulation
 
-                display = apply_matrix_shader_emulation(rgb3, self._matrix)
-            except Exception:
-                log.exception("camera_gpu: CPU fallback apply failed")
-                display = rgb3
+            display = apply_matrix_shader_emulation(rgb3, self._matrix)
+        except Exception:
+            log.exception("camera_preview: matrix apply failed — showing raw")
+            display = rgb3
+
+        try:
             self._blit_rgb(display)
-        else:
-            h, w = rgb3.shape[0], rgb3.shape[1]
-            if (
-                self._rgba_buf is None
-                or self._rgba_buf.shape[0] != h
-                or self._rgba_buf.shape[1] != w
-            ):
-                self._rgba_buf = np.empty((h, w, 4), dtype=np.uint8)
-                self._rgba_buf[..., 3] = 255
-            self._rgba_buf[..., :3] = rgb3
-            try:
-                self._blit_rgba(self._rgba_buf)
-            except Exception:
-                log.exception("camera_gpu: GPU blit failed — CPU fallback")
-                self._cpu_fallback = True
-                self._gpu_ready = False
-                try:
-                    from colorsight.camera_gpu import apply_matrix_shader_emulation
-
-                    self._blit_rgb(apply_matrix_shader_emulation(rgb3, self._matrix))
-                except Exception:
-                    self._blit_rgb(rgb3)
+        except Exception:
+            log.exception("camera_preview: texture blit failed")
+            return
 
         self._layout()
         self._upload_ms = (time.perf_counter() - t0) * 1000.0
 
-    def _blit_rgba(self, rgba: np.ndarray) -> None:
-        h, w = rgba.shape[0], rgba.shape[1]
-        if self._tex is None or tuple(self._tex.size) != (w, h):
-            self._tex = Texture.create(size=(w, h), colorfmt="rgba")
-            self._tex.mag_filter = "linear"
-            self._tex.min_filter = "linear"
-            self._tex.flip_vertical()
-        src = rgba if rgba.flags["C_CONTIGUOUS"] else np.ascontiguousarray(rgba)
-        self._tex.blit_buffer(memoryview(src.reshape(-1)), colorfmt="rgba", bufferfmt="ubyte")
-        self._rect.texture = self._tex
-
     def _blit_rgb(self, rgb: np.ndarray) -> None:
-        from colorsight.screens.photo_widgets import rgb_to_texture
-
-        self._tex = rgb_to_texture(rgb, existing=self._tex if self._tex and getattr(self._tex, "colorfmt", "") == "rgb" else None)
+        existing = None
+        if self._tex is not None and getattr(self._tex, "colorfmt", "") == "rgb":
+            existing = self._tex
+        self._tex = rgb_to_texture(rgb, existing=existing)
         self._rect.texture = self._tex
 
     def current_rgb(self) -> np.ndarray | None:
@@ -193,6 +123,8 @@ class LivePreviewStage(FloatLayout):
     def _layout(self, *_a):
         self._bg_r.pos = self.pos
         self._bg_r.size = self.size
+        if self._rect is None:
+            return
         rgb = self._rgb
         if rgb is None:
             self._rect.pos = self.pos

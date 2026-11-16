@@ -152,7 +152,7 @@ python main.py   # open Camera; Settings → Show camera FPS
 |-------|--------|
 | Desktop | OpenCV `VideoCapture(0)`; if open fails → synthetic **Test pattern** (labeled) only |
 | Android | Camera4Kivy + `camerax_provider` CameraX; runtime `CAMERA`; denied / no camera / start fail → error card with **Retry** + **Open settings** (never silent fake) |
-| Pipeline | Full-size **opacity-1** Preview under opaque stage (never opacity 0) → wait for layout → `connect_camera` after permission; analyze ~640 long side → latest-frame-wins; live longest **640**; **GPU `mat3`**; Strength/mode = uniform only; loupe name ~5 Hz; no-frame timeout ~5 s → error card; disconnect on leave/pause |
+| Pipeline | Full-size **opacity-1** Preview under opaque stage (never opacity 0) → wait for layout → `connect_camera` after permission; analyze ~640 long side → latest-frame-wins; live longest **640**; **CPU `mat3` + `rgb_to_texture`** (≡ core; GPU FS retired); Strength/mode re-blit; loupe name ~5 Hz; no-frame timeout ~5 s → error card; disconnect on leave/pause |
 | Capture | Current mode → SharedStorage/MediaStore album **ColorSight** — no paths in UI |
 | Lens | Nav → Camera + loupe via `Clock.schedule_once` (not mid-transition `sm.current`); Lens nav highlighted while loupe on |
 | Packaging | `p4a.hook` = `assets/android/p4a_hook.py`; requirements include `camera4kivy,gestures4kivy,androidstorage4kivy` (pure-Python) |

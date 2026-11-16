@@ -136,14 +136,12 @@ class CameraScreen(Screen):
         self._apply_preview_matrix()
 
     def on_enter(self, *_a):
-        # Lazy GPU shader — never compile at app start
+        # Preview uses CPU matrix + RGB texture (same math as core; reliable blit)
         try:
             if hasattr(self, "_stage") and hasattr(self._stage, "ensure_gpu"):
-                ok = self._stage.ensure_gpu()
-                if not ok and getattr(self._stage, "_cpu_fallback", False):
-                    self._set_status("Preview using CPU color (GPU unavailable)")
+                self._stage.ensure_gpu()
         except Exception:
-            log.exception("camera GPU ensure failed")
+            log.exception("camera preview init failed")
         self._start_camera()
         Clock.schedule_once(lambda dt: self._sync_nav_for_loupe(), 0)
 
