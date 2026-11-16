@@ -43,7 +43,13 @@ from colorsight.screens.camera_widgets import CameraModeToolbar, LivePreviewStag
 from colorsight.screens.photo_widgets import PreviewSeverityBar, TextLinkButton
 from colorsight.storage import profile_path
 from colorsight.theme.screen_bg import install_opaque_bg
-from colorsight.theme.tokens import Colors, Fonts, Spacing
+from colorsight.theme.tokens import (
+    NEUTRAL_SURFACE,
+    NEUTRAL_TEXT,
+    Colors,
+    Fonts,
+    Spacing,
+)
 from colorsight.widgets import PastelCard, PrimaryButton, ScreenHeader
 
 log = logging.getLogger("colorsight")
@@ -245,6 +251,9 @@ class CameraScreen(Screen):
             on_back=lambda: self._go("home"),
             trailing=self._fps_lbl,
             include_top_inset=True,
+            title_color=NEUTRAL_TEXT,
+            back_bg=NEUTRAL_SURFACE,
+            back_icon_color=NEUTRAL_TEXT,
         )
         self._overlay.add_widget(header)
 
@@ -420,9 +429,7 @@ class CameraScreen(Screen):
         if hasattr(self._source, "attach_host"):
             self._source.attach_host(self._root)
         if hasattr(self._source, "set_first_frame_cb"):
-            self._source.set_first_frame_cb(
-                lambda w, h: self._session.on_first_frame(w, h)
-            )
+            self._source.set_first_frame_cb(self._on_first_frame)
 
         started = False
         try:
@@ -461,13 +468,27 @@ class CameraScreen(Screen):
         self._poll_ev = Clock.schedule_interval(self._tick, 1.0 / 30.0)
         if is_android():
             self._set_status("Starting camera…")
-            Clock.schedule_once(self._check_first_frame, 2.5)
+            # Allow Preview layout retries (~2 s) + CameraX warm-up
+            Clock.schedule_once(self._check_first_frame, 5.0)
+
+    def _on_first_frame(self, w: int, h: int):
+        self._session.on_first_frame(w, h)
+
+        def _clear(*_a):
+            # Drop the “Starting…” line once pixels are flowing
+            if getattr(self, "_status", None) is not None:
+                if (self._status.text or "").startswith("Starting camera"):
+                    self._set_status("")
+
+        Clock.schedule_once(_clear, 0)
 
     def _check_first_frame(self, *_a):
         """If CameraX never delivered pixels, surface the failure (don't stay black)."""
         if not is_android() or self._source is None:
             return
         if self._latest_original is not None or self._frozen:
+            return
+        if getattr(self._source, "_first_frame", False):
             return
         if self.manager and self.manager.current != "camera":
             return

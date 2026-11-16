@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from kivy.app import App
-from kivy.core.clipboard import Clipboard
+from kivy.clock import Clock
 from kivy.metrics import dp
 from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.boxlayout import BoxLayout
@@ -14,6 +14,7 @@ from kivy.uix.widget import Widget
 from kivy.graphics import Color, RoundedRectangle
 
 from colorsight import __version__
+from colorsight.clipboard_util import copy_text
 from colorsight.logging_setup import read_recent_lines
 from colorsight.theme.geometry import clamped_radii
 from colorsight.theme.screen_bg import install_opaque_bg
@@ -185,17 +186,25 @@ class LogViewerScreen(Screen):
         )
         scroll.add_widget(self._body)
         root.add_widget(scroll)
-        copy = PrimaryButton(text="Copy to clipboard")
-        copy.on_press_cb = lambda *_: self._copy()
-        root.add_widget(copy)
+        self._copy_btn = PrimaryButton(text="Copy to clipboard")
+        self._copy_btn.on_press_cb = lambda *_: self._copy()
+        root.add_widget(self._copy_btn)
         self.add_widget(root)
 
     def on_pre_enter(self, *_a):
         self._body.text = read_recent_lines(300)
         self._body.color = Colors.text
+        if hasattr(self, "_copy_btn"):
+            self._copy_btn.text = "Copy to clipboard"
 
     def _copy(self):
-        Clipboard.copy(self._body.text or "")
+        ok = copy_text(self._body.text or "")
+        self._copy_btn.text = "Copied" if ok else "Copy failed"
+        Clock.schedule_once(self._reset_copy_label, 1.6)
+
+    def _reset_copy_label(self, *_a):
+        if hasattr(self, "_copy_btn"):
+            self._copy_btn.text = "Copy to clipboard"
 
     def _go(self, name: str):
         if self.manager:

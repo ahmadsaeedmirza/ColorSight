@@ -265,10 +265,14 @@ class AndroidCameraSource(FrameSource):
 
     Decision (see architecture.md): Camera4Kivy + vendored ``camerax_provider``
     is the primary path for p4a 2026.05.09 / Python 3.14 / arm64-v8a. Preview
-    stays tiny/invisible; processed frames blit through LivePreviewStage.
+    is full-bleed **opacity 1** behind ``LivePreviewStage`` (opacity 0 kills the
+    Android TextureView / CameraX surface on many devices). Processed frames
+    blit through the stage on top.
     """
 
     is_synthetic = False
+    _CONNECT_SIZE_MIN = 32
+    _CONNECT_RETRY_MAX = 40  # ~2 s at 0.05 s
 
     def __init__(self):
         self._running = False
@@ -281,6 +285,8 @@ class AndroidCameraSource(FrameSource):
         self.last_error: str | None = None
         self.frame_size = (0, 0)
         self._on_first_frame: Callable[[int, int], None] | None = None
+        self._connect_tries = 0
+        self._connect_ev = None
 
     @property
     def running(self) -> bool:
@@ -293,11 +299,11 @@ class AndroidCameraSource(FrameSource):
         self._on_first_frame = cb
 
     def start(self) -> bool:
-        """Attach Preview and connect one Clock tick later (Camera4Kivy Android rule).
+        """Attach Preview and connect after layout (Camera4Kivy Android rule).
 
-        CameraX needs a real-sized Preview surface. A 2×2 opacity-0 widget never
-        delivers analyze frames on many phones — keep Preview full-bleed under the
-        stage (opacity 0) so LivePreviewStage still paints the processed feed.
+        CameraX needs a real-sized, **visible** Preview surface. Opacity-0
+        widgets map to Android view alpha 0 and never deliver analyze frames on
+        many phones. Keep Preview full-bleed behind the opaque stage.
         """
         if self._running:
             return True
@@ -320,22 +326,23 @@ class AndroidCameraSource(FrameSource):
                     on_pixels=self._on_pixels,
                     aspect_ratio="16:9",
                 )
-                # Full-size surface (CameraX) but invisible — stage draws on top
+                # Full-size + opacity 1 (CameraX). Stage paints opaque on top.
                 self._preview.size_hint = (1, 1)
-                self._preview.opacity = 0
+                self._preview.opacity = 1
                 self._preview.pos_hint = {"x": 0, "y": 0}
                 if self._host is not None:
                     # index=len(children) → drawn first / behind siblings on FloatLayout
                     self._host.add_widget(self._preview, index=len(self._host.children))
-                    log.info("camera_event preview_attached behind_stage")
+                    log.info("camera_event preview_attached behind_stage opacity=1")
                 else:
                     log.warning("camera_event preview_no_host")
 
             self._running = True
             self._first_frame = False
             self.last_error = None
-            # Camera4Kivy: connect_camera must run after App.on_start (+ ≥1 frame)
-            Clock.schedule_once(self._connect_camera_deferred, 0)
+            self._connect_tries = 0
+            # Camera4Kivy: connect_camera after App.on_start + laid-out size
+            self._connect_ev = Clock.schedule_once(self._connect_camera_deferred, 0)
             log.info("camera_event connect_scheduled facing=%s", self._facing)
             return True
         except Exception as exc:
@@ -353,7 +360,32 @@ class AndroidCameraSource(FrameSource):
             return False
 
     def _connect_camera_deferred(self, *_dt):
+        self._connect_ev = None
         if self._preview is None or not self._running:
+            return
+        from kivy.clock import Clock
+
+        w = float(getattr(self._preview, "width", 0) or 0)
+        h = float(getattr(self._preview, "height", 0) or 0)
+        if w < self._CONNECT_SIZE_MIN or h < self._CONNECT_SIZE_MIN:
+            self._connect_tries += 1
+            if self._connect_tries > self._CONNECT_RETRY_MAX:
+                log.error(
+                    "camera_event connect_size_timeout size=%.0fx%.0f tries=%d",
+                    w,
+                    h,
+                    self._connect_tries,
+                )
+                self.last_error = ERR_START_FAILED
+                self._running = False
+                return
+            log.info(
+                "camera_event connect_wait_size size=%.0fx%.0f try=%d",
+                w,
+                h,
+                self._connect_tries,
+            )
+            self._connect_ev = Clock.schedule_once(self._connect_camera_deferred, 0.05)
             return
         try:
             facing = self._facing
@@ -364,7 +396,12 @@ class AndroidCameraSource(FrameSource):
                 analyze_pixels_resolution=640,
                 enable_video=False,
             )
-            log.info("camera_event connect_camera facing=%s", facing)
+            log.info(
+                "camera_event connect_camera facing=%s size=%.0fx%.0f",
+                facing,
+                w,
+                h,
+            )
         except Exception as exc:
             log.error(
                 "camera_event connect_deferred_failed: %s\n%s",
@@ -451,6 +488,12 @@ class AndroidCameraSource(FrameSource):
 
     def stop(self) -> None:
         self._running = False
+        if self._connect_ev is not None:
+            try:
+                self._connect_ev.cancel()
+            except Exception:
+                pass
+            self._connect_ev = None
         if self._preview is not None:
             try:
                 self._preview.disconnect_camera()

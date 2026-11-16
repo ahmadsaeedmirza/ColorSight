@@ -4,6 +4,16 @@ Newest entries first. Append after every prompt per `rules.md`.
 
 ---
 
+## 2026-11-17 — Camera/Lens black feed + log Copy broken
+
+**Prompt:** Camera + Lens still black (“Starting camera…”); Recent log Copy to clipboard does nothing.
+
+**Cause:** Full-size Preview at **opacity 0** still maps to Android view alpha 0 → CameraX/analyze never delivers frames. `connect_camera` could also run before Preview had a real layout size. Log copy used Kivy `Clipboard.copy` alone (Android ClipboardManager UI-thread race / silent fail) with no button feedback.
+
+**Fix:** Preview **opacity 1** behind opaque stage; retry connect until size ≥32 px (~2 s); first-frame clears status; no-frame timeout 5 s; Camera header uses `NEUTRAL_TEXT`. New `clipboard_util.copy_text` (pyjnius `ClipData` on UI thread + Kivy fallback) with Copied/Copy failed on the button. Docs + `tests/test_clipboard_util.py`.
+
+---
+
 ## 2026-11-16 — Vision Test tutorial glyphs + spacing
 
 **Prompt:** Tutorial missing arrow icons / cramped pad; hue “red → violet” missing middle glyph; faint “Vision Test” title.

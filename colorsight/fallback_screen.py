@@ -12,7 +12,6 @@ def build_fallback_root(exc: BaseException | None = None, detail: str = "") -> o
     Uses only stock Kivy widgets — no theme, fonts, safe_area, or GPU code.
     """
     from kivy.app import App
-    from kivy.core.clipboard import Clipboard
     from kivy.graphics import Color, Rectangle
     from kivy.uix.boxlayout import BoxLayout
     from kivy.uix.button import Button
@@ -78,8 +77,14 @@ def build_fallback_root(exc: BaseException | None = None, detail: str = "") -> o
 
     def _copy(_btn):
         try:
-            Clipboard.copy(body)
-            title.text = "ColorSight could not start — copied"
+            from colorsight.clipboard_util import copy_text
+
+            ok = copy_text(body)
+            title.text = (
+                "ColorSight could not start — copied"
+                if ok
+                else "ColorSight could not start — copy failed"
+            )
         except Exception:
             title.text = "ColorSight could not start — copy failed"
 
