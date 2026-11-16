@@ -33,6 +33,7 @@
 | Android full-screen layout (no desktop Window.size) + API 35 + phone sim | Done |
 | Dark theme + chip/camera polish + on-device diagnostics | Done |
 | **Startup crash-proof** — breadcrumbs, fallback error screen, safe_area/theme/GPU degrade, layout watchdog | Done |
+| **Splash→black fix** — essential-first screens, deferred cv2/camera, cream clearcolor + loadingscreen, size sync | Done |
 
 Stack: NumPy + OpenCV in `core/`, Kivy UI in `colorsight/`, Buildozer packaging.
 

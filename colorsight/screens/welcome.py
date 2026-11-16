@@ -23,13 +23,18 @@ class WelcomeScreen(Screen):
     def _finish(self, target: str = "test"):
         mark_onboarding_done()
         if self.manager:
+            parent = self.manager.parent
+            if hasattr(parent, "ensure_screen") and not parent.ensure_screen(target):
+                target = "home" if "home" in self.manager.screen_names else self.manager.screen_names[0]
+            if target not in self.manager.screen_names:
+                return
             self.manager.transition.direction = "left"
             self.manager.current = target
-            parent = self.manager.parent
             if hasattr(parent, "set_nav_active"):
                 parent.set_nav_active(target)
 
     def _build(self):
+        self.clear_widgets()
         scroll = ScrollView(do_scroll_x=False, bar_width=0, size_hint=(1, 1))
         content = BoxLayout(
             orientation="vertical",

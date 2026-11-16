@@ -174,6 +174,80 @@ class TestLayoutProbe(unittest.TestCase):
         self.assertTrue(broken)
         self.assertIn("None", reason)
 
+    def test_tiny_screen_on_large_root_broken(self):
+        """100×100 current screen on a phone-sized root must trip the watchdog."""
+        from colorsight.startup import layout_looks_broken
+
+        class _Scr:
+            name = "home"
+            width = 100.0
+            height = 100.0
+            x = 0.0
+            y = 0.0
+            opacity = 1.0
+            children = [1]
+
+        class _SM:
+            current = "home"
+            width = 1080.0
+            height = 2340.0
+            x = 0.0
+            y = 0.0
+            opacity = 1.0
+            children = [1]
+
+            def get_screen(self, name):
+                return _Scr()
+
+        class _Root:
+            width = 1080.0
+            height = 2340.0
+            x = 0.0
+            y = 0.0
+            opacity = 1.0
+            children = [1, 2]
+            sm = _SM()
+
+        broken, reason = layout_looks_broken(_Root())
+        self.assertTrue(broken)
+        self.assertIn("smaller", reason)
+
+
+class TestEssentialFirstStartup(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from tests.gui_guard import ensure_kivy_window
+
+        ensure_kivy_window(reason="essential-first startup needs Window")
+
+    def test_build_has_home_before_deferred_cv2(self):
+        """Essential screens must exist even if deferred (cv2) screens are blocked."""
+        import sys
+        from colorsight.app import ColorSightApp, RootShell
+        from colorsight.prefs import mark_onboarding_done
+
+        mark_onboarding_done()
+        # Block trivector/cv2 screen module; essential path must still show Home
+        sys.modules["colorsight.screens.test_screen"] = None  # type: ignore
+        try:
+            app = ColorSightApp()
+            root = app.build()
+            self.assertIsNotNone(root)
+            self.assertIsInstance(root, RootShell)
+            self.assertIn("home", root.sm.screen_names)
+            # Force deferred load now (Clock may not idle in unit tests)
+            root._load_deferred_screens()
+            self.assertIn("home", root.sm.screen_names)
+            self.assertNotIn("test", root.sm.screen_names)
+        finally:
+            sys.modules.pop("colorsight.screens.test_screen", None)
+            try:
+                from kivy.app import App as KivyApp
+
+                KivyApp._running_app = None
+            except Exception:
+                pass
+
 
 if __name__ == "__main__":
     unittest.main()

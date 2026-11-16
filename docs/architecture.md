@@ -154,18 +154,21 @@ Helpers/widgets also: Photos `BeforeAfterViewer`, `PhotoModeToolbar`, `PreviewSe
 
 ### Startup stages (crash-proof)
 
-`ColorSightApp.build()` breadcrumbs (flushed) in order: logging → exception handler → fonts → safe_area → prefs/theme → profile → RootShell/screens/nav → first-frame layout probe → 3 s watchdog.
+`ColorSightApp.build()` breadcrumbs (flushed) in order: logging → exception handler → fonts (+ usable probe) → safe_area → prefs/theme → profile → RootShell **essential screens** (welcome/home/settings) → `on_start` first-frame layout probe → deferred heavy screens (test/photos/camera/lens/profile) → 3 s watchdog.
+
+**Why splash → black was happening:** p4a dismisses the splash as soon as Python is alive; the old shell then set a dark `Window.clearcolor` and blocked on importing **all** screens (including `core`→OpenCV and Camera) before any widget was shown — so the GL surface stayed an empty dark frame. Fix: cream clearcolor until first paint, keep Android `loadingscreen` until layout is sane, build essential screens first, import heavy modules via `importlib` per screen (package `__init__` is lazy), force ScreenManager/current screen to `Window.size`, treat a stuck 100×100 screen as broken.
 
 | Stage | On failure |
 |-------|------------|
-| Fonts | If TTF files missing / register fails → **Roboto** names (never leave Labels pointing at unregistered Lexend* — that blanks every screen) |
+| Fonts | If TTF missing / register / Label probe fails → **Roboto** names (never leave Labels on unregistered Lexend*) |
 | safe_area / pyjnius | Defaults top **28 dp**, bottom **16 dp**; clamps top 0–80, bottom 0–48 |
-| Theme / night mode / bad pref | **Light** |
+| Theme / night mode / bad pref | **Light** tokens; clearcolor stays cream until first frame |
 | Camera GPU shader | Lazy compile on Camera enter; CPU `core` matrix path + status notice |
 | androidstorage4kivy / Camera4Kivy | Lazy import inside the call site |
+| Deferred screen import | That screen is skipped; nav/`ensure_screen` retries on demand |
 | Any `build()` / `rebuild_ui()` exception | Plain **fallback error screen** (white/black, stock widgets): “ColorSight could not start”, exception + last 15 log lines, **Copy details** / **Reset app data** (prefs/theme only) / **Try again** |
 
-`exception_guard` still returns `PASS` for non-fatal errors, shows a status line, counts faults in the first 5 s, and switches to the fallback if the root is empty / zero-size / invisible after 3 s.
+`exception_guard` still returns `PASS` for non-fatal errors, shows a status line, counts faults in the first 5 s, and switches to the fallback if the root is empty / zero-size / tiny vs the window / invisible after 3 s.
 
 ## UI notes
 

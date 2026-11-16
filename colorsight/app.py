@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import logging
 
 from kivy.app import App
@@ -11,6 +12,7 @@ from kivy.graphics import Color, Rectangle
 from kivy.metrics import dp
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.screenmanager import FadeTransition, NoTransition, ScreenManager
+from kivy.utils import platform
 
 from colorsight.exception_guard import install_exception_handler, reset_fallback_gate
 from colorsight.logging_setup import setup_logging
@@ -30,6 +32,26 @@ _BACK_HOME = {"test", "settings", "photos", "camera", "lens", "profile", "log_vi
 
 # Accuracy-safe neutral surfaces (theme never skews these)
 _NEUTRAL_SCREENS = {"test", "photos", "camera", "lens"}
+
+# Cream splash / first-paint clearcolor — never leave the user on dark empty GL
+_SPLASH_CLEAR = (246 / 255.0, 244 / 255.0, 241 / 255.0, 1.0)
+
+# Fast path: show these before importing cv2 / camera / trivector
+_ESSENTIAL_SCREENS = (
+    ("welcome", "colorsight.screens.welcome", "WelcomeScreen"),
+    ("home", "colorsight.screens.home", "HomeScreen"),
+    ("settings", "colorsight.screens.settings", "SettingsScreen"),
+    ("log_viewer", "colorsight.screens.settings", "LogViewerScreen"),
+)
+
+# Heavy: deferred until after first frame so splash → UI is never a black hole
+_DEFERRED_SCREENS = (
+    ("test", "colorsight.screens.test_screen", "TestScreen"),
+    ("photos", "colorsight.screens.photos", "PhotosScreen"),
+    ("camera", "colorsight.screens.camera", "CameraScreen"),
+    ("lens", "colorsight.screens.lens", "LensScreen"),
+    ("profile", "colorsight.screens.profile", "ProfileScreen"),
+)
 
 
 def show_fallback_error(exc: BaseException | None = None, detail: str = "") -> None:
@@ -60,13 +82,30 @@ def show_fallback_error(exc: BaseException | None = None, detail: str = "") -> N
         log.exception("show_fallback_error failed")
 
 
+def _hide_android_loading_screen() -> None:
+    if platform != "android":
+        return
+    try:
+        from android import loadingscreen  # type: ignore
+
+        loadingscreen.hide_loading_screen()
+        breadcrumb("android_splash_hidden")
+    except Exception as exc:
+        log.debug("loadingscreen hide skipped: %s", exc)
+
+
 class RootShell(FloatLayout):
-    """ScreenManager + floating nav; nav hidden on welcome."""
+    """ScreenManager + floating nav; nav hidden on welcome.
+
+    Builds welcome/home/settings first so the first frame is never blocked on
+    OpenCV / Camera4Kivy / trivector imports. Heavy screens load right after.
+    """
 
     NAV_SCREENS = {"home", "photos", "camera", "lens", "profile", "test", "settings"}
 
     def __init__(self, start_screen: str | None = None, **kwargs):
         super().__init__(**kwargs)
+        self._deferred_pending = True
         # Explicit fill — never rely on a one-shot Window.size at import time
         self.size_hint = (1, 1)
         with self.canvas.before:
@@ -83,34 +122,32 @@ class RootShell(FloatLayout):
         )
         self.bind(size=self._sync_sm, pos=self._sync_sm)
 
-        from colorsight.theme.screen_bg import install_opaque_bg
-
-        screen_ctors = self._screen_ctors()
-        for name, ctor in screen_ctors:
-            breadcrumb("screen_build_begin", name)
-            try:
-                screen = ctor()
-                if not hasattr(screen, "_bg_rect"):
-                    install_opaque_bg(
-                        screen, neutral=(screen.name in _NEUTRAL_SCREENS)
-                    )
-                self.sm.add_widget(screen)
-                breadcrumb("screen_build_ok", name)
-            except Exception as exc:
-                log.exception("screen build failed: %s", name)
-                breadcrumb("screen_build_fail", f"{name} {type(exc).__name__}")
+        # Essential screens only — first paint must not import cv2/camera
+        for name, mod_path, cls_name in _ESSENTIAL_SCREENS:
+            self._try_add_screen(name, mod_path, cls_name)
 
         breadcrumb("nav_build")
-        from colorsight.widgets import FloatingNavBar
+        self.nav = None
+        try:
+            from colorsight.widgets import FloatingNavBar
 
-        self.nav = FloatingNavBar()
-        self.nav.navigate_cb = self._navigate
+            self.nav = FloatingNavBar()
+            self.nav.navigate_cb = self._navigate
+        except Exception:
+            log.exception("nav build failed — continuing without nav")
+            breadcrumb("nav_build_fail")
+            self.nav = None
+
         self.add_widget(self.sm)
-        self.add_widget(self.nav)
-        self.bind(size=self._place_nav)
-        self._place_nav()
+        if self.nav is not None:
+            self.add_widget(self.nav)
+            self.bind(size=self._place_nav)
+            self._place_nav()
         self.sm.bind(current=self._on_screen)
 
+        if start_screen:
+            # Theme rebuild may return_to a deferred screen — load it now
+            self.ensure_screen(start_screen)
         if start_screen and start_screen in self.sm.screen_names:
             initial = start_screen
         else:
@@ -125,53 +162,84 @@ class RootShell(FloatLayout):
         if self.sm.screen_names:
             self.sm.current = initial
             self._on_screen(self.sm, self.sm.current)
-            # Restore soft fade after first paint
-            Clock.schedule_once(self._enable_fade, 0)
+            self._force_current_visible()
+            # Soft fade only after deferred screens are in (avoids opacity-0 traps)
+            Clock.schedule_once(self._enable_fade, 0.35)
 
         Window.bind(on_keyboard=self._on_key)
         if not self.sm.screen_names:
-            # Every screen failed (often missing fonts) — raise so build() shows fallback
             raise RuntimeError(
                 "No screens could be built (check fonts / startup log). "
                 "Labels need registered fonts or Roboto fallback."
             )
         breadcrumb("root_shell_ready", f"current={getattr(self.sm, 'current', None)}")
+        # Heavy screens after first layout tick
+        Clock.schedule_once(self._load_deferred_screens, 0)
 
-    def _screen_ctors(self):
-        # Import screens lazily so a broken module cannot kill the whole shell
-        from colorsight.screens import (
-            CameraScreen,
-            HomeScreen,
-            LensScreen,
-            LogViewerScreen,
-            PhotosScreen,
-            ProfileScreen,
-            SettingsScreen,
-            TestScreen,
-            WelcomeScreen,
-        )
+    def _try_add_screen(self, name: str, mod_path: str, cls_name: str) -> bool:
+        if name in self.sm.screen_names:
+            return True
+        breadcrumb("screen_build_begin", name)
+        try:
+            mod = importlib.import_module(mod_path)
+            ctor = getattr(mod, cls_name)
+            screen = ctor()
+            if not hasattr(screen, "_bg_rect"):
+                from colorsight.theme.screen_bg import install_opaque_bg
 
-        return (
-            ("welcome", WelcomeScreen),
-            ("home", HomeScreen),
-            ("test", TestScreen),
-            ("photos", PhotosScreen),
-            ("camera", CameraScreen),
-            ("lens", LensScreen),
-            ("profile", ProfileScreen),
-            ("settings", SettingsScreen),
-            ("log_viewer", LogViewerScreen),
-        )
+                install_opaque_bg(screen, neutral=(screen.name in _NEUTRAL_SCREENS))
+            self.sm.add_widget(screen)
+            breadcrumb("screen_build_ok", name)
+            return True
+        except Exception:
+            log.exception("screen build failed: %s", name)
+            breadcrumb("screen_build_fail", f"{name}")
+            return False
+
+    def _load_deferred_screens(self, *_a):
+        breadcrumb("deferred_screens_begin")
+        for name, mod_path, cls_name in _DEFERRED_SCREENS:
+            self._try_add_screen(name, mod_path, cls_name)
+        self._deferred_pending = False
+        self._sync_sm()
+        breadcrumb("deferred_screens_done", f"n={len(self.sm.screen_names)}")
+
+    def ensure_screen(self, name: str) -> bool:
+        """Build a deferred screen on demand (nav before deferred load finishes)."""
+        if name in self.sm.screen_names:
+            return True
+        for n, mod_path, cls_name in _DEFERRED_SCREENS + _ESSENTIAL_SCREENS:
+            if n == name:
+                return self._try_add_screen(n, mod_path, cls_name)
+        return False
 
     def _enable_fade(self, *_a):
         try:
+            # Never leave a screen stuck at opacity 0 from a half-finished fade
+            for scr in list(self.sm.screens):
+                if float(getattr(scr, "opacity", 1)) < 0.99:
+                    scr.opacity = 1.0
             self.sm.transition = FadeTransition(duration=0.22)
+        except Exception:
+            pass
+
+    def _force_current_visible(self):
+        try:
+            cur = self.sm.get_screen(self.sm.current)
+            cur.opacity = 1.0
+            cur.size = self.sm.size
+            cur.pos = self.sm.pos
         except Exception:
             pass
 
     def _sync_sm(self, *_a):
         self.sm.pos = self.pos
         self.sm.size = self.size
+        try:
+            self.sm.do_layout()
+        except Exception:
+            pass
+        self._force_current_visible()
 
     def _sync_bg(self, *_args):
         self._bg.pos = self.pos
@@ -184,6 +252,8 @@ class RootShell(FloatLayout):
             pass
 
     def _place_nav(self, *_args):
+        if self.nav is None:
+            return
         try:
             from colorsight.theme.tokens import Spacing
 
@@ -196,6 +266,9 @@ class RootShell(FloatLayout):
         self.nav.y = self.y + margin + bottom
 
     def _on_screen(self, _sm, name):
+        self._force_current_visible()
+        if self.nav is None:
+            return
         show_nav = name in self.NAV_SCREENS and name != "welcome"
         self.nav.opacity = 1 if show_nav else 0
         self.nav.disabled = not show_nav
@@ -216,6 +289,9 @@ class RootShell(FloatLayout):
         if key == "lens":
             self._navigate_lens()
             return
+        if not self.ensure_screen(key):
+            log.error("navigate: screen %s unavailable", key)
+            return
         if key == "camera":
             try:
                 cam = self.sm.get_screen("camera")
@@ -229,10 +305,14 @@ class RootShell(FloatLayout):
 
     def _navigate_lens(self):
         try:
+            if not self.ensure_screen("camera"):
+                log.error("navigate lens: camera unavailable")
+                return
             self.sm.transition.direction = "left"
             if self.sm.current != "camera":
                 self.sm.current = "camera"
-            self.nav.active = "lens"
+            if self.nav is not None:
+                self.nav.active = "lens"
             Clock.schedule_once(self._enable_lens_loupe, 0)
         except Exception:
             log.exception("navigate lens failed")
@@ -242,7 +322,8 @@ class RootShell(FloatLayout):
             cam = self.sm.get_screen("camera")
             if hasattr(cam, "set_loupe_enabled"):
                 cam.set_loupe_enabled(True)
-            self.nav.active = "lens"
+            if self.nav is not None:
+                self.nav.active = "lens"
         except Exception:
             log.exception("enable lens loupe failed")
 
@@ -250,7 +331,7 @@ class RootShell(FloatLayout):
         if screen_name == "lens":
             self._navigate_lens()
             return
-        if screen_name in self.sm.screen_names:
+        if self.ensure_screen(screen_name) and screen_name in self.sm.screen_names:
             self.sm.current = screen_name
 
     def go_back(self) -> bool:
@@ -305,7 +386,33 @@ class ColorSightApp(App):
 
                 return Label(text=f"ColorSight could not start\n{type(exc).__name__}: {exc}")
 
+    def on_start(self):
+        """First real frame: sync layout, dismiss Android splash, never leave black GL."""
+        try:
+            Window.clearcolor = _SPLASH_CLEAR
+            try:
+                Window.update_viewport()
+            except Exception:
+                pass
+            root = self.root
+            if isinstance(root, RootShell):
+                # Match Window now that the surface exists (Android often sizes late)
+                try:
+                    root.size = Window.size
+                    root.pos = (0, 0)
+                except Exception:
+                    pass
+                root._sync_sm()
+                root._force_current_visible()
+            Clock.schedule_once(self._after_first_frame, 0)
+            Clock.schedule_once(self._layout_watchdog, 3.0)
+        except Exception:
+            log.exception("on_start failed")
+
     def _build_ui(self):
+        # Keep cream clearcolor until a real screen is up (dark theme else = black void)
+        Window.clearcolor = _SPLASH_CLEAR
+
         breadcrumb("logging_setup_begin")
         setup_logging()
         breadcrumb("logging_setup_done")
@@ -316,8 +423,14 @@ class ColorSightApp(App):
         breadcrumb("fonts_begin")
         try:
             from colorsight.theme import register_fonts
+            from colorsight.theme.theme import verify_fonts_usable
 
             register_fonts()
+            if not verify_fonts_usable():
+                from colorsight.theme.theme import _use_default_font_names
+
+                _use_default_font_names()
+                breadcrumb("fonts_roboto_fallback")
         except Exception as exc:
             log.warning("fonts failed: %s", exc)
             try:
@@ -341,24 +454,24 @@ class ColorSightApp(App):
         try:
             from colorsight.prefs import get_theme_pref
             from colorsight.theme.theme import get_theme
-            from colorsight.theme.tokens import Colors
 
             theme = get_theme()
             pref = get_theme_pref()
             if pref not in ("system", "light", "dark"):
                 pref = "light"
             theme.preference = pref
+            # Apply tokens but keep cream clearcolor until first frame (avoids black void)
             theme.apply(rebuild=False)
-            Window.clearcolor = Colors.bg
+            Window.clearcolor = _SPLASH_CLEAR
         except Exception as exc:
             log.warning("theme/prefs failed — Light fallback: %s", exc)
             try:
                 from colorsight.theme.tokens import apply_color_set
 
                 apply_color_set("light")
-                Window.clearcolor = (1, 1, 1, 1)
             except Exception:
-                Window.clearcolor = (1, 1, 1, 1)
+                pass
+            Window.clearcolor = _SPLASH_CLEAR
         breadcrumb("prefs_theme_done")
 
         breadcrumb("profile_load_begin")
@@ -380,8 +493,7 @@ class ColorSightApp(App):
         breadcrumb("root_shell_begin")
         shell = RootShell()
         breadcrumb("root_shell_done")
-        Clock.schedule_once(self._after_first_frame, 0)
-        Clock.schedule_once(self._layout_watchdog, 3.0)
+        # on_start schedules first-frame + watchdog (Window size is real there)
         return shell
 
     def _after_first_frame(self, *_a):
@@ -391,9 +503,21 @@ class ColorSightApp(App):
         root = self.root
         breadcrumb("first_frame", describe_widget(root))
         try:
+            # Now safe to show themed clearcolor
+            try:
+                from colorsight.theme.tokens import Colors
+
+                Window.clearcolor = Colors.bg
+            except Exception:
+                pass
             if isinstance(root, RootShell):
-                # Ensure SM fills the shell after Window has a real size
+                try:
+                    root.size = Window.size
+                    root.pos = (0, 0)
+                except Exception:
+                    pass
                 root._sync_sm()
+                root._force_current_visible()
                 breadcrumb("layout_root", describe_widget(root))
                 breadcrumb("layout_sm", describe_widget(root.sm))
                 try:
@@ -410,8 +534,11 @@ class ColorSightApp(App):
             if broken:
                 log.error("layout broken after first frame: %s", reason)
                 show_fallback_error(None, detail=reason)
+            else:
+                _hide_android_loading_screen()
         except Exception:
             log.exception("after_first_frame probe failed")
+            _hide_android_loading_screen()
 
     def _layout_watchdog(self, *_a):
         """If nothing visible after 3s, show the fallback error screen."""

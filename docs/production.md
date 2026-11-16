@@ -9,6 +9,10 @@ The app hit a fatal startup error and showed the plain fallback screen (white ba
 3. Optional: **Reset app data** clears prefs/theme only (keeps your vision-test profile), then **Try again**.
 4. Startup breadcrumbs in Settings → Debug → View recent log look like `startup:stage +Nms total=…`.
 
+## If you see splash then a black / empty screen
+
+That usually meant the splash was dismissed while the UI was still importing heavy modules (OpenCV / Camera) on a dark clearcolor, or the current screen stayed stuck at the default **100×100** size. Current builds: cream clearcolor + Android loading screen until the first real frame; essential screens (Welcome/Home) paint first; deferred screens load right after; layout watchdog trips if the current screen is tiny vs the window. If it still happens, grab `adb logcat` around `startup:` lines and Settings → Debug → View recent log after a force-stop.
+
 ## Before you push (Android / cloud build)
 
 Run these **before** pushing to `build-apk` or triggering **Android APK**:

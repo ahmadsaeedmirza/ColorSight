@@ -99,14 +99,20 @@ def describe_widget(w: Any) -> str:
 
 
 def layout_looks_broken(root: Any) -> tuple[bool, str]:
-    """Return (broken, reason) for empty / zero-size / off-screen / invisible UI."""
+    """Return (broken, reason) for empty / zero-size / off-screen / invisible UI.
+
+    A 100×100 screen on a phone-sized root looks like a black/empty app — treat
+    that as broken (legacy default widget size stuck after Window resize).
+    """
     try:
         if root is None:
             return True, "root is None"
         kids = getattr(root, "children", None) or []
         if len(kids) == 0:
             return True, "root has no children"
-        if float(getattr(root, "width", 0) or 0) <= 1 or float(getattr(root, "height", 0) or 0) <= 1:
+        rw = float(getattr(root, "width", 0) or 0)
+        rh = float(getattr(root, "height", 0) or 0)
+        if rw <= 1 or rh <= 1:
             return True, f"root size too small ({describe_widget(root)})"
         sm = getattr(root, "sm", None)
         if sm is not None:
@@ -118,13 +124,19 @@ def layout_looks_broken(root: Any) -> tuple[bool, str]:
                 cur = None
             if cur is None:
                 return True, f"current screen missing (current={getattr(sm, 'current', None)!r})"
-            if float(cur.width) <= 1 or float(cur.height) <= 1:
+            cw = float(cur.width)
+            ch = float(cur.height)
+            if cw <= 1 or ch <= 1:
                 return True, f"current screen size invalid ({describe_widget(cur)})"
+            # Stuck at Kivy default 100×100 (or otherwise tiny vs the window)
+            if rw >= 200 and rh >= 200 and (cw < rw * 0.5 or ch < rh * 0.5):
+                return True, (
+                    f"current screen much smaller than root "
+                    f"({describe_widget(cur)} vs root {rw:.0f}x{rh:.0f})"
+                )
             if float(getattr(cur, "opacity", 1)) <= 0.01:
                 return True, f"current screen opacity 0 ({describe_widget(cur)})"
-            # Far outside window
-            rw, rh = float(root.width), float(root.height)
-            if cur.x > rw or cur.y > rh or (cur.x + cur.width) < 0 or (cur.y + cur.height) < 0:
+            if cur.x > rw or cur.y > rh or (cur.x + cw) < 0 or (cur.y + ch) < 0:
                 return True, f"current screen outside window ({describe_widget(cur)})"
         return False, ""
     except Exception as exc:

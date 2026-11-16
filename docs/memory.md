@@ -4,6 +4,16 @@ Newest entries first. Append after every prompt per `rules.md`.
 
 ---
 
+## 2026-11-16 — Fix splash→black screen (verify before APK)
+
+**Prompt:** APK still splash then black; previous crash-proof work did not fix it. Do not push.
+
+**Root cause:** Splash dismissed early while `RootShell` eagerly imported every screen (`screens/__init__` → TestScreen → `core`/cv2 + Camera). Dark `Window.clearcolor` left an empty GL frame. Layout watchdog treated stuck **100×100** screens as OK.
+
+**Fix:** Lazy `screens/__init__`; essential-first build (welcome/home/settings) then deferred heavy screens; cream clearcolor + Android `loadingscreen` until first sane frame; force SM/current screen to `Window.size`; font path resolve + Label probe → Roboto; tighter layout probe; nav/`ensure_screen` for deferred targets. Verified with `test_startup_resilience` + preflight (no push).
+
+---
+
 ## 2026-11-16 — Android startup crash-proof + blank UI diagnosis
 
 **Prompt:** APK showed splash then only themed background (no screens). ExceptionHandler PASS hid errors. No `/core` / staircase / scoring / assertion changes. Build safety unchanged.

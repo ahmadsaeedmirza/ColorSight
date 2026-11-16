@@ -36,12 +36,14 @@ def register_fonts() -> None:
     global _registered
     if _registered:
         return
+    # Prefer Android/app cwd + __file__ parents so packaged APKs resolve assets/
+    fonts_dir, icons_dir = _resolve_asset_dirs()
     files = (
-        (_FONTS_DIR / "Lexend-Regular.ttf", Fonts.regular),
-        (_FONTS_DIR / "Lexend-Medium.ttf", Fonts.medium),
-        (_FONTS_DIR / "Lexend-SemiBold.ttf", Fonts.semibold),
-        (_FONTS_DIR / "Lexend-Bold.ttf", Fonts.bold),
-        (_ICONS_DIR / "MaterialIcons-Regular.ttf", Fonts.icons),
+        (fonts_dir / "Lexend-Regular.ttf", Fonts.regular),
+        (fonts_dir / "Lexend-Medium.ttf", Fonts.medium),
+        (fonts_dir / "Lexend-SemiBold.ttf", Fonts.semibold),
+        (fonts_dir / "Lexend-Bold.ttf", Fonts.bold),
+        (icons_dir / "MaterialIcons-Regular.ttf", Fonts.icons),
     )
     missing = [str(p) for p, _ in files if not p.is_file()]
     if missing:
@@ -53,11 +55,62 @@ def register_fonts() -> None:
         for path, name in files:
             LabelBase.register(name=name, fn_regular=str(path))
         _registered = True
-        log.info("fonts registered Lexend + MaterialIcons")
+        log.info("fonts registered Lexend + MaterialIcons from %s", fonts_dir)
     except Exception as exc:
         log.warning("font registration failed (using Roboto defaults): %s", exc)
         _use_default_font_names()
         _registered = True  # do not retry forever
+
+
+def _resolve_asset_dirs() -> tuple[Path, Path]:
+    """Find assets/fonts and assets/icons on desktop and inside the APK tree."""
+    candidates: list[Path] = []
+    try:
+        candidates.append(Path(__file__).resolve().parents[2])
+    except Exception:
+        pass
+    try:
+        import os
+
+        arg = os.environ.get("ANDROID_ARGUMENT") or os.environ.get("ANDROID_APP_PATH")
+        if arg:
+            candidates.append(Path(arg))
+    except Exception:
+        pass
+    try:
+        candidates.append(Path.cwd())
+    except Exception:
+        pass
+    for root in candidates:
+        fonts = root / "assets" / "fonts"
+        icons = root / "assets" / "icons"
+        if (fonts / "Lexend-Regular.ttf").is_file():
+            return fonts, icons if icons.is_dir() else _ICONS_DIR
+    return _FONTS_DIR, _ICONS_DIR
+
+
+def verify_fonts_usable() -> bool:
+    """Return False only when Labels cannot resolve Fonts.bold (missing file).
+
+    An empty texture_size before the GL context is fully ready is NOT a failure —
+    that previously forced Roboto on every launch.
+    """
+    try:
+        from kivy.uix.label import Label
+
+        lbl = Label(text="Ag", font_name=Fonts.bold, font_size=12)
+        try:
+            lbl.texture_update()
+        except Exception:
+            pass
+        return True
+    except OSError as exc:
+        log.warning("font probe OSError for %s: %s", Fonts.bold, exc)
+        return False
+    except Exception as exc:
+        # Unexpected — keep registered names; screen builds will catch real failures
+        log.warning("font probe soft-fail for %s: %s", Fonts.bold, exc)
+        return True
 
 
 def font_name(weight: str = "regular") -> str:

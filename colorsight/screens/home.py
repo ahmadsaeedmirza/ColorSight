@@ -110,6 +110,10 @@ class HomeScreen(Screen):
             if screen_name == "lens" and hasattr(parent, "_navigate"):
                 parent._navigate("lens")
                 return
+            if hasattr(parent, "ensure_screen") and not parent.ensure_screen(screen_name):
+                return
+            if screen_name not in self.manager.screen_names:
+                return
             self.manager.transition.direction = "left"
             self.manager.current = screen_name
             if hasattr(parent, "set_nav_active"):
@@ -134,7 +138,9 @@ class HomeScreen(Screen):
             parent = self.manager.parent
             if target == "lens" and hasattr(parent, "_navigate"):
                 parent._navigate("lens")
-            else:
+            elif hasattr(parent, "set_nav_active"):
+                parent.set_nav_active(target)
+            elif hasattr(parent, "ensure_screen") and parent.ensure_screen(target):
                 self.manager.current = target
 
     def _build(self):
