@@ -205,6 +205,11 @@ class TextLinkButton(ButtonBehavior, Label):
         self.text_size = self.size
 
 
+# Inactive mode labels on the dark pill — brighter than Colors.toolbar_text so
+# "Original" / "Simulation" stay readable next to the white active chip.
+_TOOLBAR_INACTIVE = (0.82, 0.82, 0.86, 1.0)
+
+
 class _ModeChip(ButtonBehavior, Label):
     def __init__(self, key: str, text: str, active: bool, on_tap, **kwargs):
         super().__init__(**kwargs)
@@ -213,7 +218,7 @@ class _ModeChip(ButtonBehavior, Label):
         self.text = text
         self.font_name = Fonts.semibold if active else Fonts.medium
         self.font_size = dp(12)
-        self.color = Colors.toolbar_text_active if active else Colors.toolbar_text
+        self.color = Colors.toolbar_text_active if active else _TOOLBAR_INACTIVE
         self.halign = "center"
         self.valign = "middle"
         self.size_hint = (1, 1)
@@ -227,7 +232,7 @@ class _ModeChip(ButtonBehavior, Label):
     def set_active(self, active: bool):
         self._active = active
         self.font_name = Fonts.semibold if active else Fonts.medium
-        self.color = Colors.toolbar_text_active if active else Colors.toolbar_text
+        self.color = Colors.toolbar_text_active if active else _TOOLBAR_INACTIVE
 
     def on_release(self):
         _invoke(self._on_tap, self.key)

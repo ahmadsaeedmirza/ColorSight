@@ -35,7 +35,14 @@ from colorsight.screens.photo_widgets import (
     TextLinkButton,
 )
 from colorsight.storage import profile_path
-from colorsight.theme.tokens import Colors, Fonts, Spacing
+from colorsight.theme.tokens import (
+    Colors,
+    Fonts,
+    NEUTRAL_SURFACE,
+    NEUTRAL_TEXT,
+    NEUTRAL_TEXT_MUTED,
+    Spacing,
+)
 from colorsight.widgets import PastelCard, PrimaryButton, ScreenHeader
 
 log = logging.getLogger(__name__)
@@ -249,7 +256,7 @@ class PhotosScreen(Screen):
                 text="Strength",
                 font_name=Fonts.semibold,
                 font_size=dp(13),
-                color=Colors.text,
+                color=NEUTRAL_TEXT,
                 size_hint=(None, 1),
                 width=dp(72),
                 halign="left",
@@ -261,7 +268,7 @@ class PhotosScreen(Screen):
             text=f"{int(round(self._preview_severity * 100))}",
             font_name=Fonts.semibold,
             font_size=dp(13),
-            color=Colors.text,
+            color=NEUTRAL_TEXT,
             size_hint=(None, 1),
             width=dp(36),
         )
@@ -272,7 +279,7 @@ class PhotosScreen(Screen):
             text="Starts at your test result. Move it to fine-tune the preview.",
             font_name=Fonts.regular,
             font_size=dp(11),
-            color=Colors.text_muted,
+            color=NEUTRAL_TEXT_MUTED,
             size_hint_y=None,
             height=dp(20),
             halign="left",
@@ -294,7 +301,7 @@ class PhotosScreen(Screen):
             text="Adjust the strength until it matches how you see it.",
             font_name=Fonts.regular,
             font_size=dp(11),
-            color=Colors.text_muted,
+            color=NEUTRAL_TEXT_MUTED,
             size_hint_y=None,
             height=dp(0),
             opacity=0,
@@ -312,21 +319,37 @@ class PhotosScreen(Screen):
         self._body.add_widget(self._toolbar)
         self._update_sim_hint()
 
+        # Stacked full-width actions — horizontal row was height=48 while buttons
+        # grow past 52dp and overlapped the mode toolbar; white btn must use
+        # NEUTRAL_TEXT (Colors.text is light in dark theme → invisible on white).
         actions = BoxLayout(
-            orientation="horizontal",
+            orientation="vertical",
             size_hint_y=None,
-            height=dp(48),
-            spacing=dp(8),
+            spacing=dp(10),
+            padding=[0, dp(8), 0, 0],
         )
         change = PrimaryButton(text="Choose another")
-        change.bg_color = (1, 1, 1, 1)
-        change.text_color = Colors.text
+        change.bg_color = NEUTRAL_SURFACE
+        change.text_color = NEUTRAL_TEXT
         change.on_press_cb = lambda *_: self._pick()
         actions.add_widget(change)
 
         export = PrimaryButton(text="Export comparison")
         export.on_press_cb = lambda *_: self._export_comparison(share=False)
         actions.add_widget(export)
+
+        def _sync_actions_h(*_a):
+            actions.height = (
+                change.height
+                + export.height
+                + actions.spacing
+                + actions.padding[1]
+                + actions.padding[3]
+            )
+
+        change.bind(height=_sync_actions_h)
+        export.bind(height=_sync_actions_h)
+        _sync_actions_h()
         self._body.add_widget(actions)
 
         self._status = Label(

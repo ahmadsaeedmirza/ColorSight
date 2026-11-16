@@ -205,7 +205,7 @@ Apply the **same** clamped value to fill **and** matching shadow layers. Used by
 - **Empty:** pink card + large “Choose a photo” (Android: system Photo Picker / content chooser; failures show a friendly status — never a silent no-op; no paths in UI).
 - **Viewer:** opens in Corrected with filter on the **whole** image (divider **0%**, handle at left, ≥44 dp, inside bounds). Drag right to reveal original. One-time session hint: “Drag the handle to compare with the original.”
 - **Strength:** reloaded from disk every enter; “Reset to my result” when changed.
-- **Actions:** Save/Share current mode; Export comparison; no paths in UI.
+- **Actions:** Save/Share on the mode pill; **Choose another** (white + `NEUTRAL_TEXT`) and **Export comparison** stacked full-width below (never a cramped 48dp row — that overlapped the toolbar). Labels on the cream accuracy surface use `NEUTRAL_TEXT` / `NEUTRAL_TEXT_MUTED`, not theme `Colors.text`.
 - Bottom padding = `nav_clearance`.
 
 ### Camera / Lens recipe

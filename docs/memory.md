@@ -4,6 +4,16 @@ Newest entries first. Append after every prompt per `rules.md`.
 
 ---
 
+## 2026-11-16 — Photos action contrast + spacing
+
+**Prompt:** Photo correction — “Choose another” text invisible; buttons overlapping / cramped.
+
+**Cause:** White secondary button used `Colors.text` (light in dark theme). Action row fixed at 48dp while `PrimaryButton` grows past 52dp → overlap.
+
+**Fix:** `NEUTRAL_TEXT` on white button; stack Choose another / Export vertically with synced height; brighter inactive mode chips; Strength labels use neutral text on cream surface. Docs updated.
+
+---
+
 ## 2026-11-16 — Version sync 0.1.1 (About + APK)
 
 **Prompt:** Manage the version shown in the app.
