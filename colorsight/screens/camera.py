@@ -25,6 +25,7 @@ from colorsight.camera_pipeline import (
     name_loupe_color,
 )
 from colorsight.camera_source import (
+    ERR_START_FAILED,
     CameraSessionState,
     FakeFrameSource,
     create_frame_source,
@@ -458,6 +459,23 @@ class CameraScreen(Screen):
             self._poll_ev.cancel()
         # Poll faster than display; blit is latest-frame-wins on Clock
         self._poll_ev = Clock.schedule_interval(self._tick, 1.0 / 30.0)
+        if is_android():
+            self._set_status("Starting camera…")
+            Clock.schedule_once(self._check_first_frame, 2.5)
+
+    def _check_first_frame(self, *_a):
+        """If CameraX never delivered pixels, surface the failure (don't stay black)."""
+        if not is_android() or self._source is None:
+            return
+        if self._latest_original is not None or self._frozen:
+            return
+        if self.manager and self.manager.current != "camera":
+            return
+        reason = getattr(self._source, "last_error", None) or ERR_START_FAILED
+        log.error("camera_event no_frames_timeout reason=%s", reason)
+        self._session.on_start_result(False, reason)
+        self._refresh_cards()
+        self._set_status(self._session.friendly_message() or "Camera failed to start")
 
     def _set_test_pattern_visible(self, visible: bool):
         if hasattr(self, "_test_pattern_lbl"):

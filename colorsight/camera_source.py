@@ -293,10 +293,16 @@ class AndroidCameraSource(FrameSource):
         self._on_first_frame = cb
 
     def start(self) -> bool:
+        """Attach Preview and connect one Clock tick later (Camera4Kivy Android rule).
+
+        CameraX needs a real-sized Preview surface. A 2×2 opacity-0 widget never
+        delivers analyze frames on many phones — keep Preview full-bleed under the
+        stage (opacity 0) so LivePreviewStage still paints the processed feed.
+        """
         if self._running:
             return True
         try:
-            from camera4kivy import Preview  # type: ignore
+            from camera4kivy import Preview  # type: ignore  # noqa: F401
         except Exception as exc:
             log.error(
                 "camera_event camera4kivy_import_failed: %s\n%s",
@@ -307,35 +313,30 @@ class AndroidCameraSource(FrameSource):
             return False
 
         try:
+            from kivy.clock import Clock
+
             if self._preview is None:
                 self._preview = _AnalysisPreview(
                     on_pixels=self._on_pixels,
                     aspect_ratio="16:9",
                 )
-                # Keep Preview in the tree so CameraX surfaces stay alive, but
-                # invisible — we render through LivePreviewStage instead.
-                self._preview.size_hint = (None, None)
-                self._preview.size = (2, 2)
+                # Full-size surface (CameraX) but invisible — stage draws on top
+                self._preview.size_hint = (1, 1)
                 self._preview.opacity = 0
-                self._preview.pos = (0, 0)
+                self._preview.pos_hint = {"x": 0, "y": 0}
                 if self._host is not None:
-                    self._host.add_widget(self._preview)
-                    log.info("camera_event preview_attached")
+                    # index=len(children) → drawn first / behind siblings on FloatLayout
+                    self._host.add_widget(self._preview, index=len(self._host.children))
+                    log.info("camera_event preview_attached behind_stage")
                 else:
                     log.warning("camera_event preview_no_host")
 
-            facing = self._facing
-            self._preview.connect_camera(
-                camera_id=facing,
-                mirrored=(facing == "front"),
-                enable_analyze_pixels=True,
-                analyze_pixels_resolution=640,
-                enable_video=False,
-            )
             self._running = True
             self._first_frame = False
             self.last_error = None
-            log.info("camera_event connect_camera facing=%s", facing)
+            # Camera4Kivy: connect_camera must run after App.on_start (+ ≥1 frame)
+            Clock.schedule_once(self._connect_camera_deferred, 0)
+            log.info("camera_event connect_scheduled facing=%s", self._facing)
             return True
         except Exception as exc:
             log.error(
@@ -350,6 +351,34 @@ class AndroidCameraSource(FrameSource):
                 self.last_error = ERR_START_FAILED
             self._running = False
             return False
+
+    def _connect_camera_deferred(self, *_dt):
+        if self._preview is None or not self._running:
+            return
+        try:
+            facing = self._facing
+            self._preview.connect_camera(
+                camera_id=facing,
+                mirrored=(facing == "front"),
+                enable_analyze_pixels=True,
+                analyze_pixels_resolution=640,
+                enable_video=False,
+            )
+            log.info("camera_event connect_camera facing=%s", facing)
+        except Exception as exc:
+            log.error(
+                "camera_event connect_deferred_failed: %s\n%s",
+                exc,
+                traceback.format_exc(),
+            )
+            msg = str(exc).lower()
+            if "permission" in msg:
+                self.last_error = ERR_PERMISSION
+            elif "camera" in msg and ("not found" in msg or "unavailable" in msg):
+                self.last_error = ERR_NO_CAMERA
+            else:
+                self.last_error = ERR_START_FAILED
+            self._running = False
 
     def _on_pixels(self, pixels, image_size, mirror: bool) -> None:
         try:

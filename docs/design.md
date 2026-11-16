@@ -66,6 +66,8 @@ Light + dark palettes live in `tokens.py` (`LIGHT_COLORS` / `DARK_COLORS`). `Col
 
 **Theme apply = full UI rebuild:** changing System/Light/Dark updates tokens + `Window.clearcolor`, then `ColorSightApp.rebuild_ui()` recreates the `ScreenManager`, every screen, and the floating nav in-process (prefs/profile stay on disk). Returning to Settings after a theme pick. Avoid relying on partial `apply_theme()` walks — canvas instructions can keep stale colors. **System** follows Android `Configuration.uiMode` at start, on resume, and when night mode flips.
 
+**Android system bars:** `apply_system_bars(resolved)` paints status + navigation/gesture bars to `Colors.bg` (with matching icon contrast) so dark theme never leaves white OEM chrome at the top/bottom.
+
 ### Safe-area insets (Android 15 / edge-to-edge)
 
 `colorsight.safe_area` reads status/nav/cutout insets (WindowInsets, else `status_bar_height`) into **`Spacing.safe_top`** / **`Spacing.safe_bottom`** (dp; desktop minimum top **16**). `ScreenHeader` and Home/Welcome tops use `safe_top`; the floating nav sits above `safe_bottom`; `nav_clearance` includes it. Phone sim: `COLORSIGHT_INSET_TOP=28` / `COLORSIGHT_INSET_BOTTOM=24` (or `set_debug_insets`).

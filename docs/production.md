@@ -1,5 +1,11 @@
 # Production — Build & device testing
 
+## App version
+
+- **Settings → About** shows `ColorSight v{colorsight.__version__}`.
+- **APK** uses `buildozer.spec` `version =`.
+- Keep those two strings **identical**. `tools/preflight.py` fails if they drift. Current: **0.1.1**.
+
 ## If you see “ColorSight could not start”
 
 The app hit a fatal startup error and showed the plain fallback screen (white background, black text).
@@ -146,7 +152,7 @@ python main.py   # open Camera; Settings → Show camera FPS
 |-------|--------|
 | Desktop | OpenCV `VideoCapture(0)`; if open fails → synthetic **Test pattern** (labeled) only |
 | Android | Camera4Kivy + `camerax_provider` CameraX; runtime `CAMERA`; denied / no camera / start fail → error card with **Retry** + **Open settings** (never silent fake) |
-| Pipeline | Analyze ~640 long side → latest-frame-wins; live longest **640**; **GPU `mat3`** on reused RGBA texture (no per-frame NumPy color); Strength/mode = uniform only; loupe name ~5 Hz; `connect_camera` / `disconnect_camera` on enter/leave/pause |
+| Pipeline | Full-size opacity-0 Preview under stage → `connect_camera` next frame after permission; analyze ~640 long side → latest-frame-wins; live longest **640**; **GPU `mat3`**; Strength/mode = uniform only; loupe name ~5 Hz; no-frame timeout ~2.5 s → error card; disconnect on leave/pause |
 | Capture | Current mode → SharedStorage/MediaStore album **ColorSight** — no paths in UI |
 | Lens | Nav → Camera + loupe via `Clock.schedule_once` (not mid-transition `sm.current`); Lens nav highlighted while loupe on |
 | Packaging | `p4a.hook` = `assets/android/p4a_hook.py`; requirements include `camera4kivy,gestures4kivy,androidstorage4kivy` (pure-Python) |

@@ -137,7 +137,7 @@ Reuses **`core.apply_correction`**, **`core.apply_simulation`**, and **`Correcti
 | `exception_guard.py` | Global Kivy `ExceptionHandler` → diagnostics log + “Something went wrong”; `ExceptionManager.PASS` |
 | `camerax_provider/` | Vendored CameraX Java + `gradle_options.py` (chained from `assets/android/p4a_hook.py`) |
 
-Frame loop: `connect_camera` on enter (after permission) → analyze pixels → latest-frame-wins (no queue) → downscale → **upload raw** into one reused RGBA texture → GPU `mat3` draw. Strength/mode only update the uniform. Loupe crops the CPU original when on; color name ~5 Hz. Capture still uses CPU `render_mode_rgb` once. Timing (`recv` / `upload` / `draw` ms + fps) every 5 s to the log. `disconnect_camera` on leave/pause.
+Frame loop: after permission, attach a **full-size opacity-0** Camera4Kivy `Preview` behind `LivePreviewStage` (CameraX needs a real surface — a 2×2 preview yields a black feed), then `connect_camera` on the **next Clock frame** (Camera4Kivy Android rule: after `App.on_start`). Analyze pixels → latest-frame-wins → downscale → **upload raw** into one reused RGBA texture → GPU `mat3` draw. Strength/mode only update the uniform. Loupe crops the CPU original when on; color name ~5 Hz. Capture still uses CPU `render_mode_rgb` once. If no frame arrives within ~2.5 s on Android → error card. Timing (`recv` / `upload` / `draw` ms + fps) every 5 s to the log. `disconnect_camera` on leave/pause.
 
 Helpers/widgets also: Photos `BeforeAfterViewer`, `PhotoModeToolbar`, `PreviewSeverityBar`, `TextLinkButton`, `LoadingShimmer`. Callbacks use `*_cb` names only.
 
@@ -162,7 +162,7 @@ Helpers/widgets also: Photos `BeforeAfterViewer`, `PhotoModeToolbar`, `PreviewSe
 |-------|------------|
 | Fonts | If TTF missing / register / Label probe fails → **Roboto** names (never leave Labels on unregistered Lexend*) |
 | safe_area / pyjnius | Defaults top **28 dp**, bottom **16 dp**; clamps top 0–80, bottom 0–48 |
-| Theme / night mode / bad pref | **Light** tokens; clearcolor stays cream until first frame |
+| Theme / night mode / bad pref | **Light** tokens; clearcolor stays cream until first frame; then `apply_system_bars` paints Android status/nav bars to `Colors.bg` (no white chrome) |
 | Camera GPU shader | Lazy compile on Camera enter; CPU `core` matrix path + status notice |
 | androidstorage4kivy / Camera4Kivy | Lazy import inside the call site |
 | Deferred screen import | That screen is skipped; nav/`ensure_screen` retries on demand |

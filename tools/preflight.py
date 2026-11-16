@@ -132,6 +132,28 @@ def check_buildozer_spec() -> None:
     else:
         ok("buildozer.spec: single version = line")
 
+    spec_ver = _spec_value(text, "version")
+    init_path = ROOT / "colorsight" / "__init__.py"
+    py_ver = None
+    if init_path.is_file():
+        m = re.search(
+            r'^__version__\s*=\s*["\']([^"\']+)["\']',
+            _read_text(init_path),
+            re.MULTILINE,
+        )
+        if m:
+            py_ver = m.group(1).strip()
+    if spec_ver and py_ver:
+        if spec_ver.strip() != py_ver:
+            err(
+                f"version mismatch: buildozer.spec={spec_ver!r} "
+                f"colorsight.__version__={py_ver!r} (Settings → About)"
+            )
+        else:
+            ok(f"version synced ({py_ver}) - APK + Settings About")
+    elif not py_ver:
+        err("colorsight/__init__.py missing __version__ string")
+
     if re.search(r"^version\.regex\s*=", text, re.MULTILINE):
         err("buildozer.spec must not set version.regex")
     if re.search(r"^version\.filename\s*=", text, re.MULTILINE):

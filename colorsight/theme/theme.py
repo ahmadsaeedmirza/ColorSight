@@ -143,6 +143,75 @@ def system_prefers_dark() -> bool:
         return False
 
 
+def _rgba_to_argb_int(rgba) -> int:
+    """Kivy (r,g,b,a) floats 0–1 → Android Color int (opaque)."""
+    r = max(0, min(255, int(round(float(rgba[0]) * 255))))
+    g = max(0, min(255, int(round(float(rgba[1]) * 255))))
+    b = max(0, min(255, int(round(float(rgba[2]) * 255))))
+    return (0xFF << 24) | (r << 16) | (g << 8) | b
+
+
+def apply_system_bars(resolved: str | None = None) -> None:
+    """Paint Android status + nav bars to match the theme (kills white system chrome).
+
+    Desktop: no-op. Failures are logged and ignored — UI still runs.
+    """
+    if platform != "android":
+        return
+    try:
+        from colorsight.theme.tokens import Colors
+
+        resolved = (resolved or "light").lower()
+        # Match app canvas so letterboxed edges never flash cream/white
+        Window.clearcolor = Colors.bg
+        color_int = _rgba_to_argb_int(Colors.bg)
+        light_icons = resolved != "dark"  # dark icons on light bars
+
+        from jnius import autoclass
+
+        PythonActivity = autoclass("org.kivy.android.PythonActivity")
+        activity = PythonActivity.mActivity
+        if activity is None:
+            return
+        View = autoclass("android.view.View")
+        window = activity.getWindow()
+        # Draw app behind system bars, then color the bars themselves
+        try:
+            LayoutParams = autoclass("android.view.WindowManager$LayoutParams")
+            window.addFlags(LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
+            try:
+                window.clearFlags(LayoutParams.FLAG_TRANSLUCENT_STATUS)
+                window.clearFlags(LayoutParams.FLAG_TRANSLUCENT_NAVIGATION)
+            except Exception:
+                pass
+        except Exception:
+            pass
+        try:
+            window.setStatusBarColor(color_int)
+            window.setNavigationBarColor(color_int)
+        except Exception as exc:
+            log.warning("system bar color set failed: %s", exc)
+            return
+
+        # Icon contrast: light bars → dark icons; dark bars → light icons
+        try:
+            decor = window.getDecorView()
+            flags = decor.getSystemUiVisibility()
+            LIGHT_STATUS = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+            # LIGHT_NAVIGATION_BAR = 0x00000010 on API 26+
+            LIGHT_NAV = 16
+            if light_icons:
+                flags = flags | LIGHT_STATUS | LIGHT_NAV
+            else:
+                flags = flags & ~LIGHT_STATUS & ~LIGHT_NAV
+            decor.setSystemUiVisibility(flags)
+        except Exception as exc:
+            log.debug("systemUiVisibility tweak skipped: %s", exc)
+        log.info("system bars applied resolved=%s", resolved)
+    except Exception as exc:
+        log.warning("apply_system_bars failed: %s", exc)
+
+
 class ThemeController(EventDispatcher):
     """preference: system | light | dark; revision bumps on every apply."""
 
@@ -186,6 +255,10 @@ class ThemeController(EventDispatcher):
             from colorsight.theme.tokens import Colors
 
             Window.clearcolor = Colors.bg
+            try:
+                apply_system_bars(resolved)
+            except Exception:
+                pass
             self.revision += 1
             log.info("theme applied preference=%s resolved=%s", self.preference, resolved)
         except Exception as exc:
@@ -197,6 +270,7 @@ class ThemeController(EventDispatcher):
                 from colorsight.theme.tokens import Colors
 
                 Window.clearcolor = Colors.bg
+                apply_system_bars("light")
             except Exception:
                 pass
             return

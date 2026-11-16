@@ -503,11 +503,13 @@ class ColorSightApp(App):
         root = self.root
         breadcrumb("first_frame", describe_widget(root))
         try:
-            # Now safe to show themed clearcolor
+            # Match canvas + Android status/nav bars to the active theme (no white chrome)
             try:
+                from colorsight.theme.theme import apply_system_bars, get_theme
                 from colorsight.theme.tokens import Colors
 
                 Window.clearcolor = Colors.bg
+                apply_system_bars(get_theme().resolved)
             except Exception:
                 pass
             if isinstance(root, RootShell):

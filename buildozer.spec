@@ -7,7 +7,7 @@ source.dir = .
 source.include_exts = py,png,jpg,jpeg,kv,atlas,ttf,otf,md,txt,xml
 source.include_patterns = assets/*,assets/fonts/*,assets/icons/*,assets/android/*,docs/*,colorsight/*,core/*
 
-version = 0.1.0
+version = 0.1.1
 
 # Desktop deps stay in requirements.txt. Android: leave recipe deps unpinned for
 # p4a 2026.05.09 / Python 3.14. Do NOT pin charset-normalizer here — p4a drops

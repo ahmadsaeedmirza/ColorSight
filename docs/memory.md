@@ -4,6 +4,32 @@ Newest entries first. Append after every prompt per `rules.md`.
 
 ---
 
+## 2026-11-16 — Version sync 0.1.1 (About + APK)
+
+**Prompt:** Manage the version shown in the app.
+
+**Fix:** Bump `colorsight.__version__` and `buildozer.spec` `version` to **0.1.1** (must stay identical). Settings → About shows `ColorSight v{__version__}`. Preflight fails if they drift.
+
+---
+
+## 2026-11-16 — Theme system bars (kill white top/bottom chrome)
+
+**Prompt:** White status + gesture bars on dark theme Camera screenshot.
+
+**Fix:** `apply_system_bars(resolved)` sets Android status/nav bar colors to `Colors.bg` + icon contrast flags; `Window.clearcolor` stays in sync. Called from theme apply + first frame.
+
+---
+
+## 2026-11-16 — Camera black preview (full-size Preview + deferred connect)
+
+**Prompt:** Camera screen chrome visible but feed solid black; fix camera only first.
+
+**Cause:** Tiny 2×2 opacity-0 Camera4Kivy Preview gave CameraX no real surface; `connect_camera` could also run too early.
+
+**Fix:** Full-bleed invisible Preview behind `LivePreviewStage`; `connect_camera` on next Clock tick; 2.5 s no-frame → error card. Docs updated.
+
+---
+
 ## 2026-11-16 — Fix splash→black screen (verify before APK)
 
 **Prompt:** APK still splash then black; previous crash-proof work did not fix it. Do not push.

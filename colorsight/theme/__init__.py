@@ -14,6 +14,7 @@ from .theme import (
     get_theme,
     system_prefers_dark,
     verify_fonts_usable,
+    apply_system_bars,
 )
 from .geometry import clamp_radius, clamped_radii
 from .screen_bg import install_opaque_bg, ThemedScreen
@@ -32,6 +33,7 @@ __all__ = [
     "get_theme",
     "system_prefers_dark",
     "verify_fonts_usable",
+    "apply_system_bars",
     "clamp_radius",
     "clamped_radii",
     "install_opaque_bg",
