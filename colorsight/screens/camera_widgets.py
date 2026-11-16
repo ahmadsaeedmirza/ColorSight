@@ -32,7 +32,7 @@ from colorsight.camera_gpu import PREVIEW_FS, identity_matrix, mat3_uniform
 from colorsight.camera_pipeline import DEFAULT_ZOOM, LOUPE_DIAMETER_DP
 from colorsight.screens.photo_widgets import _invoke, rgb_to_texture
 from colorsight.theme.geometry import clamped_radii
-from colorsight.theme.tokens import Colors, Fonts, Icons, NEUTRAL_SURFACE, Radii
+from colorsight.theme.tokens import Colors, Fonts, Icons, NEUTRAL_SURFACE, NEUTRAL_TEXT, Radii
 from colorsight.widgets import Icon
 
 log = logging.getLogger("colorsight")
@@ -265,11 +265,12 @@ class LoupeOverlay(FloatLayout):
         self._swatch = Widget(size_hint=(None, None), size=(dp(16), dp(16)))
         self._swatch2 = Widget(size_hint=(None, None), size=(dp(16), dp(16)))
         self._swatch2.opacity = 0
+        # Pill is always near-white — never use Colors.text (light in dark theme).
         self._name_lbl = Label(
             text="",
             font_name=Fonts.semibold,
             font_size=dp(11),
-            color=Colors.text,
+            color=NEUTRAL_TEXT,
             size_hint=(1, 1),
             halign="left",
             valign="middle",

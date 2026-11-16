@@ -33,7 +33,13 @@ from colorsight.prefs import (
 )
 from colorsight.screens.photo_widgets import TextLinkButton
 from colorsight.screens.test_tutorial import VisionTestTutorial
-from colorsight.theme.tokens import Colors, Fonts, Spacing
+from colorsight.theme.tokens import (
+    NEUTRAL_SURFACE,
+    NEUTRAL_TEXT,
+    Colors,
+    Fonts,
+    Spacing,
+)
 from colorsight.widgets import PastelCard, PrimaryButton, ScreenHeader
 from colorsight.screens.test_widgets import (
     ArrowPad,
@@ -111,10 +117,14 @@ class TestScreen(Screen):
             self._timeout_ev = None
 
     def _header(self, title: str, show_back=True):
+        # Vision Test uses NEUTRAL_BG — keep title/back readable in dark theme.
         return ScreenHeader(
             title=title,
             show_back=show_back,
             on_back=self._go_home if show_back else None,
+            title_color=NEUTRAL_TEXT,
+            back_bg=NEUTRAL_SURFACE,
+            back_icon_color=NEUTRAL_TEXT,
         )
 
     def _bind_keys(self):
@@ -394,7 +404,7 @@ class TestScreen(Screen):
         colors = hue_tile_colors(7)
         intro = PastelCard(
             title="Hue arrangement",
-            subtitle="Tap two tiles to swap them. Arrange colors from red → violet (rainbow order).",
+            subtitle="Tap two tiles to swap them. Arrange colors from red to violet (rainbow order).",
             palette="lavender",
             size_hint_y=None,
             auto_height=True,

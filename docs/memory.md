@@ -4,6 +4,24 @@ Newest entries first. Append after every prompt per `rules.md`.
 
 ---
 
+## 2026-11-16 — Vision Test tutorial glyphs + spacing
+
+**Prompt:** Tutorial missing arrow icons / cramped pad; hue “red → violet” missing middle glyph; faint “Vision Test” title.
+
+**Cause:** Tutorial tip + practice used Lexend Unicode arrows (`↑←↓→`); hue subtitle used `→` — Lexend has no those glyphs on Android (tofu). Header used theme `Colors.text` on cream `NEUTRAL_BG` (invisible in dark theme). Practice `PrimaryButton` keys overflowed a too-short inverted-T row.
+
+**Fix:** Material Icons via `Icon` / `ArrowKey` (same as real ArrowPad); hue copy “red to violet”; `ScreenHeader` optional `title_color` / back neutrals on Test; practice pad uses `ARROW_KEY_DP` + `AnchorLayout` centering. Docs updated.
+
+---
+
+## 2026-11-16 — Lens loupe name pill contrast
+
+**Prompt:** Lens (Camera+loupe) — “light gray” label invisible on white pill; ask if Camera fixes apply.
+
+**Answer:** Black feed + system bars share Camera’s path (Lens is loupe state on Camera). Name pill was separate: white pill + dark-theme `Colors.text`. Fix: `NEUTRAL_TEXT` on loupe name label.
+
+---
+
 ## 2026-11-16 — Photos action contrast + spacing
 
 **Prompt:** Photo correction — “Choose another” text invisible; buttons overlapping / cramped.

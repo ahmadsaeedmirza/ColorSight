@@ -9,21 +9,29 @@ from kivy.animation import Animation
 from kivy.clock import Clock
 from kivy.graphics import Color, Ellipse, Line, RoundedRectangle
 from kivy.metrics import dp
+from kivy.uix.anchorlayout import AnchorLayout
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.label import Label
 from kivy.uix.widget import Widget
 
+from colorsight.screens.photo_widgets import TextLinkButton
+from colorsight.screens.test_widgets import (
+    ARROW_GAP_DP,
+    ARROW_KEY_DP,
+    ArrowKey,
+)
 from colorsight.theme.tokens import (
     NEUTRAL_BG,
     NEUTRAL_TEXT,
     NEUTRAL_TEXT_MUTED,
     Colors,
     Fonts,
+    Icons,
     Spacing,
 )
 from colorsight.widgets import PrimaryButton
-from colorsight.screens.photo_widgets import TextLinkButton
+from colorsight.widgets.icon import Icon
 
 
 class _DemoRing(Widget):
@@ -52,7 +60,6 @@ class _DemoRing(Widget):
             Color(*NEUTRAL_BG)
             inner = r * 0.55
             Ellipse(pos=(cx - inner, cy - inner), size=(inner * 2, inner * 2))
-            # Gap wedge (cover a sector with bg)
             Color(*NEUTRAL_BG)
             gap = self._gap
             w = r * 0.55
@@ -69,38 +76,54 @@ class _DemoRing(Widget):
 
 
 class _PulseArrowHint(BoxLayout):
-    """Simple inverted-T outline that gently pulses (step 2)."""
+    """Inverted-T Material Icons pad that gently pulses (step 2)."""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.orientation = "vertical"
         self.size_hint_y = None
-        self.height = dp(120)
-        self.spacing = dp(6)
+        key = dp(48)
+        gap = dp(ARROW_GAP_DP)
+        self.height = key * 2 + gap + dp(8)
+        self.spacing = gap
         self.opacity = 0.85
-        row_up = BoxLayout(size_hint_y=None, height=dp(36))
-        row_up.add_widget(Widget())
-        row_up.add_widget(self._key("↑"))
-        row_up.add_widget(Widget())
-        self.add_widget(row_up)
-        row = BoxLayout(size_hint_y=None, height=dp(36), spacing=dp(8))
-        row.add_widget(self._key("←"))
-        row.add_widget(self._key("↓"))
-        row.add_widget(self._key("→"))
-        self.add_widget(row)
+
+        top = AnchorLayout(
+            anchor_x="center",
+            anchor_y="center",
+            size_hint_y=None,
+            height=key,
+        )
+        top.add_widget(self._icon(Icons.arrow_upward, key))
+        self.add_widget(top)
+
+        bottom = BoxLayout(
+            orientation="horizontal",
+            size_hint=(None, None),
+            size=(key * 3 + gap * 2, key),
+            spacing=gap,
+            pos_hint={"center_x": 0.5},
+        )
+        bottom.add_widget(self._icon(Icons.arrow_back, key))
+        bottom.add_widget(self._icon(Icons.arrow_downward, key))
+        bottom.add_widget(self._icon(Icons.arrow_forward, key))
+        holder = AnchorLayout(
+            anchor_x="center",
+            anchor_y="center",
+            size_hint_y=None,
+            height=key,
+        )
+        holder.add_widget(bottom)
+        self.add_widget(holder)
+
         self._anim = None
         Clock.schedule_once(lambda dt: self._pulse(), 0.2)
 
-    def _key(self, text: str) -> Label:
-        lbl = Label(
-            text=text,
-            font_name=Fonts.bold,
-            font_size=dp(22),
-            color=Colors.accent_blue,
-            size_hint=(None, None),
-            size=(dp(44), dp(36)),
-        )
-        return lbl
+    def _icon(self, name: str, side: float) -> Icon:
+        ic = Icon(icon=name, icon_size=28, color=Colors.accent_blue)
+        ic.size_hint = (None, None)
+        ic.size = (side, side)
+        return ic
 
     def _pulse(self, *_a):
         self._anim = Animation(opacity=0.35, duration=0.7) + Animation(
@@ -153,10 +176,13 @@ class VisionTestTutorial(BoxLayout):
     def __init__(self, *, finish_cb=None, skip_cb=None, **kwargs):
         super().__init__(**kwargs)
         self.orientation = "vertical"
+        self.size_hint_y = None
+        self.spacing = dp(Spacing.md)
         self.finish_cb = finish_cb
         self.skip_cb = skip_cb
         self._step = 0
         self._practice_gap = "left"
+        self.bind(minimum_height=self.setter("height"))
         self._build_step()
 
     def _paint_neutral(self, widget: Widget):
@@ -181,7 +207,8 @@ class VisionTestTutorial(BoxLayout):
         header = BoxLayout(
             orientation="horizontal",
             size_hint_y=None,
-            height=dp(40),
+            height=dp(44),
+            spacing=dp(8),
         )
         title = Label(
             text=f"Quick tip {self._step + 1} of 3" if self._step < 3 else "Try one",
@@ -190,50 +217,59 @@ class VisionTestTutorial(BoxLayout):
             color=NEUTRAL_TEXT_MUTED,
             halign="left",
             valign="middle",
+            size_hint_y=1,
         )
         title.bind(size=lambda *_: setattr(title, "text_size", title.size))
         header.add_widget(title)
         skip = TextLinkButton(text="Skip")
         skip.color = Colors.accent_blue
+        skip.size_hint = (None, 1)
+        skip.width = dp(56)
         skip.bind(on_release=lambda *_: self._skip())
         header.add_widget(skip)
         self.add_widget(header)
 
-        body = BoxLayout(orientation="vertical", spacing=dp(12), size_hint_y=None)
+        body = BoxLayout(
+            orientation="vertical",
+            spacing=dp(Spacing.md),
+            size_hint_y=None,
+        )
         body.bind(minimum_height=body.setter("height"))
 
         if self._step == 0:
-            body.add_widget(self._copy(
-                "You'll see a circle with a ring. One side of the ring has a small gap."
-            ))
+            body.add_widget(
+                self._copy(
+                    "You'll see a circle with a ring. One side of the ring has a small gap."
+                )
+            )
             ring = _DemoRing(gap="right")
             wrap = FloatLayout(size_hint_y=None, height=dp(180))
             ring.pos_hint = {"center_x": 0.5, "center_y": 0.5}
             wrap.add_widget(ring)
             body.add_widget(wrap)
+            body.add_widget(Widget(size_hint_y=None, height=dp(8)))
             body.add_widget(self._next_btn("Next"))
         elif self._step == 1:
             body.add_widget(self._copy("Tap the arrow that points to the gap."))
+            body.add_widget(Widget(size_hint_y=None, height=dp(12)))
             body.add_widget(_PulseArrowHint())
+            body.add_widget(Widget(size_hint_y=None, height=dp(16)))
             body.add_widget(self._next_btn("Next"))
         elif self._step == 2:
-            body.add_widget(self._copy(
-                "Can't see the ring or the gap? Tap I can't see it. Guessing is not needed."
-            ))
+            body.add_widget(
+                self._copy(
+                    "Can't see the ring or the gap? Tap I can't see it. "
+                    "Guessing is not needed."
+                )
+            )
+            body.add_widget(Widget(size_hint_y=None, height=dp(8)))
             body.add_widget(_PeachHint())
+            body.add_widget(Widget(size_hint_y=None, height=dp(16)))
             body.add_widget(self._next_btn("Try a practice"))
         else:
             self._build_practice(body)
 
         self.add_widget(body)
-        Clock.schedule_once(lambda dt: self._fit_height(), 0)
-
-    def _fit_height(self):
-        h = dp(8)
-        for c in self.children:
-            if c.size_hint_y is None:
-                h += float(c.height) + float(self.spacing or 0)
-        self.height = max(dp(320), h)
 
     def _copy(self, text: str) -> Label:
         lbl = Label(
@@ -279,11 +315,14 @@ class VisionTestTutorial(BoxLayout):
             self.finish_cb()
 
     def _build_practice(self, body: BoxLayout):
-        body.add_widget(self._copy(
-            "Practice only — tap the arrow that matches the gap. This does not count."
-        ))
+        body.add_widget(
+            self._copy(
+                "Practice only — tap the arrow that matches the gap. "
+                "This does not count."
+            )
+        )
         self._practice_ring = _DemoRing(gap=self._practice_gap)
-        wrap = FloatLayout(size_hint_y=None, height=dp(180))
+        wrap = FloatLayout(size_hint_y=None, height=dp(168))
         self._practice_ring.pos_hint = {"center_x": 0.5, "center_y": 0.5}
         wrap.add_widget(self._practice_ring)
         body.add_widget(wrap)
@@ -298,36 +337,56 @@ class VisionTestTutorial(BoxLayout):
         )
         body.add_widget(self._feedback)
 
+        key = dp(ARROW_KEY_DP)
+        gap = dp(ARROW_GAP_DP)
         pad = BoxLayout(
             orientation="vertical",
             size_hint_y=None,
-            height=dp(100),
-            spacing=dp(6),
+            height=key * 2 + gap,
+            spacing=gap,
         )
-        up_row = BoxLayout(size_hint_y=None, height=dp(44))
-        up_row.add_widget(Widget())
-        up_row.add_widget(self._practice_key("up", "↑"))
-        up_row.add_widget(Widget())
-        pad.add_widget(up_row)
-        mid = BoxLayout(size_hint_y=None, height=dp(44), spacing=dp(8))
-        mid.add_widget(self._practice_key("left", "←"))
-        mid.add_widget(self._practice_key("down", "↓"))
-        mid.add_widget(self._practice_key("right", "→"))
-        pad.add_widget(mid)
+        top = AnchorLayout(
+            anchor_x="center",
+            anchor_y="center",
+            size_hint_y=None,
+            height=key,
+        )
+        top.add_widget(
+            ArrowKey("up", Icons.arrow_upward, on_orient=self._on_practice)
+        )
+        pad.add_widget(top)
+
+        bottom = BoxLayout(
+            orientation="horizontal",
+            size_hint=(None, None),
+            size=(key * 3 + gap * 2, key),
+            spacing=gap,
+            pos_hint={"center_x": 0.5},
+        )
+        bottom.add_widget(
+            ArrowKey("left", Icons.arrow_back, on_orient=self._on_practice)
+        )
+        bottom.add_widget(
+            ArrowKey("down", Icons.arrow_downward, on_orient=self._on_practice)
+        )
+        bottom.add_widget(
+            ArrowKey("right", Icons.arrow_forward, on_orient=self._on_practice)
+        )
+        holder = AnchorLayout(
+            anchor_x="center",
+            anchor_y="center",
+            size_hint_y=None,
+            height=key,
+        )
+        holder.add_widget(bottom)
+        pad.add_widget(holder)
         body.add_widget(pad)
 
+        body.add_widget(Widget(size_hint_y=None, height=dp(12)))
         start = PrimaryButton(text="Start the real test")
         start.bg_color = Colors.accent_blue
         start.on_press_cb = lambda *_: self._finish()
         body.add_widget(start)
-
-    def _practice_key(self, orient: str, glyph: str) -> PrimaryButton:
-        btn = PrimaryButton(text=glyph)
-        btn.size_hint_x = None
-        btn.width = dp(56)
-        btn.bg_color = Colors.accent_dark
-        btn.on_press_cb = lambda *_: self._on_practice(orient)
-        return btn
 
     def _on_practice(self, orient: str):
         if orient == self._practice_gap:

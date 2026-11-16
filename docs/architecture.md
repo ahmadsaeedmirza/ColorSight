@@ -177,6 +177,6 @@ Helpers/widgets also: Photos `BeforeAfterViewer`, `PhotoModeToolbar`, `PreviewSe
 - `FloatingNavBar`: five identical slots; blue `+` FAB clamped inside pill; `navigate_cb`.
 - `Chip` / `ChipRow`: auto-width single-line pills in a scrollbar-free horizontal `ScrollView`; `select_cb` / `change_cb`.
 - `ScreenHeader`: shared back + gap + title (Photos, Camera, Settings, Profile, Test).
-- `ArrowPad`: keyboard inverted-T; desktop `Window.on_key_down` arrows map to the same orient callbacks.
+- `ArrowPad`: keyboard inverted-T; desktop `Window.on_key_down` arrows map to the same orient callbacks. Tutorial tip/practice reuse Material Icons / `ArrowKey` (no Lexend Unicode arrows).
 - Never name custom widgets after built-in Kivy widgets; `Icon` uses **`icon_size`**; callback props use `*_cb` + `callable()`.
 - `RootShell` creates the nav **before** setting `sm.current` so first-run / Home switch cannot touch a missing nav.

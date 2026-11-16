@@ -211,12 +211,15 @@ Apply the **same** clamped value to fill **and** matching shadow layers. Used by
 ### Camera / Lens recipe
 
 - Full-bleed `LivePreviewStage` (contain, no distortion); floating dark mode pill + Strength + freeze/capture (+ flip on Android). Real camera on Android (Camera4Kivy); never silent synthetic frames on device — desktop may show a **Test pattern** badge if the webcam is missing. Error cards: friendly permission / no-camera / start-failed copy + Retry / Open settings (no paths).
+- **Lens** = Camera with loupe on (same feed). Loupe name pill is near-white → label always uses `NEUTRAL_TEXT` (not theme `Colors.text`).
 - Loupe (~140 dp): zoom 2–4×, crosshair, lock on long-press, name pill via `core.name_color` (median 9×9 of **original** frame); corrected swatch when in Corrected mode.
 - Lens nav → Camera with loupe on. Respect `nav_clearance`.
 
 ### Test screen recipe
 
-- **First-time tutorial** (neutral BG): three tips (gap in the ring → tap the matching arrow → “I can’t see it”) with Skip on every step; optional practice trial with instant feedback; then **Start the real test**. Practice never touches the staircase/scoring/profile. Pref `test_tutorial_seen`; Replay from Settings or the checklist link.
+- **First-time tutorial** (neutral BG): three tips (gap in the ring → tap the matching arrow → “I can’t see it”) with Skip on every step; optional practice trial with instant feedback; then **Start the real test**. Arrow hints/practice use **Material Icons** (`ArrowKey` / `Icon`) — never Lexend Unicode arrows (missing glyphs on Android). Practice never touches the staircase/scoring/profile. Pref `test_tutorial_seen`; Replay from Settings or the checklist link.
+- **Test headers** on cream: `ScreenHeader(..., title_color=NEUTRAL_TEXT, back_bg=NEUTRAL_SURFACE, back_icon_color=NEUTRAL_TEXT)` so the title stays readable in dark theme.
+- **Hue intro copy:** “red to violet” (ASCII) — no Unicode `→` in Lexend labels.
 - **Checklist** (yellow/mint, `PastelCard(auto_height=True)`): brightness / night mode / ~40 cm / glasses  
 
 - **Trivector**: “Question N” + progress capsule; Landolt C ~132 dp from a **512 px** texture (linear filter); prompt with clear gap above an **inverted-T D-pad** (Up; Left·Down·Right @ 72 dp / 8 dp gaps); “I can't see it” full width; ~6 s timeout. Desktop: physical arrow keys answer (nothing else advances). Trial shell is **reused** (texture blit only). Compact column (~570 dp) fits **360×640** without scroll; bottom inset = `nav_height + nav_margin + 8` (clears floating nav).  

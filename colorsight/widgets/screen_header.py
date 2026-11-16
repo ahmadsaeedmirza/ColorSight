@@ -26,6 +26,9 @@ class ScreenHeader(BoxLayout):
         on_back=None,
         trailing=None,
         include_top_inset: bool = True,
+        title_color=None,
+        back_bg=None,
+        back_icon_color=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -36,10 +39,13 @@ class ScreenHeader(BoxLayout):
         self.height = dp(48) + top
         self.spacing = dp(Spacing.header_gap)
 
+        fg = title_color if title_color is not None else Colors.text
         if show_back:
             btn = RoundIconButton(icon=Icons.arrow_back, diameter=44)
-            btn.bg_color = Colors.surface
-            btn.icon_color = Colors.text
+            btn.bg_color = back_bg if back_bg is not None else Colors.surface
+            btn.icon_color = (
+                back_icon_color if back_icon_color is not None else Colors.text
+            )
             btn.on_press_cb = (lambda *_: on_back()) if callable(on_back) else None
             self.add_widget(btn)
         else:
@@ -49,7 +55,7 @@ class ScreenHeader(BoxLayout):
             text=title,
             font_name=Fonts.bold,
             font_size=dp(20),
-            color=Colors.text,
+            color=fg,
             halign="left",
             valign="middle",
             shorten=True,
